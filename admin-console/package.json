@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "node ./scripts/next-with-wasm.cjs dev",
+    "build": "node ./scripts/next-with-wasm.cjs build",
+    "start": "node ./scripts/next-with-wasm.cjs start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
   },
