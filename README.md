@@ -1,120 +1,229 @@
 # TrackMe
 
-TrackMe is an Android-first, lawful, consent-based Device Recovery and Protection platform for organization-owned or explicitly enrolled Android devices.
+TrackMe is an Android-first device recovery and protection platform for organization-owned or explicitly enrolled Android devices.
 
-The project is built around visible enrollment, explicit disclosure, auditable recovery workflows, and policy-safe device management. It is not designed for covert surveillance, hidden activation, or spyware-like behavior.
+This project is intentionally not a spyware app. It does not try to hide itself, secretly record people, bypass Android permissions, or depend on restricted device identifiers like IMEI, IMSI, or device serial for its core behavior.
+
+The design goal is simple:
+
+- visible enrollment
+- explicit consent
+- lawful location collection
+- strong audit trails
+- realistic recovery workflows
 
 ## What This Repository Contains
 
+This repository has three main product surfaces:
+
 - `app/`
-  Android app built with Kotlin, Jetpack Compose, Hilt, Room, WorkManager, MVVM/Clean Architecture.
+  The Android app that runs on the device.
 - `backend/`
-  FastAPI backend with PostgreSQL + PostGIS, tenant-aware APIs, incident management, location ingestion, and audit logging.
+  The FastAPI backend that stores shared state, enforces security rules, and processes telemetry.
 - `admin-console/`
-  Next.js + TypeScript web admin console for inventory, incidents, geofences, audit review, and remote action approvals.
+  The Next.js web console used by operators and administrators.
 
-## Core Product Principles
+If you are learning the project, think of it like this:
 
-- Visible enrollment and explicit consent.
-- No stealth tracking.
-- No hidden icon behavior.
-- No covert screenshots, camera, microphone, or secret recording.
-- No restricted identifier dependence for core functionality.
-- Approximate location is labeled as approximate.
-- Sensitive actions require confirmation and audit reason.
+- the Android app gathers lawful device-side evidence
+- the backend decides what is allowed and what gets stored
+- the admin console shows that information in a controlled interface
 
-## Current Platform Scope
+## Read This First
 
-### Android App
+The easiest learning path is:
 
-- Onboarding and consent flow.
-- Device enrollment flow.
-- Home dashboard and protected/managed device state.
-- Device status, lost mode, map, incidents, settings, and audit history screens.
-- Location fusion engine using lawful signals:
-  - fused location
-  - last known location
-  - geofence context
-  - motion context
-  - network context
-  - optional approximate backend IP fallback
-- Battery-aware normal mode and time-boxed lost mode.
-- Local append-only audit trail.
-- Explicit consent gating for background check-ins and lost-mode scheduling.
+1. [`docs/architecture.md`](./docs/architecture.md)
+2. [`docs/android-app.md`](./docs/android-app.md)
+3. [`docs/backend.md`](./docs/backend.md)
+4. [`docs/location-engine.md`](./docs/location-engine.md)
+5. [`docs/security.md`](./docs/security.md)
+6. [`docs/testing.md`](./docs/testing.md)
 
-### Backend
+The larger test execution plan also lives in [`TEST_STRATEGY.md`](./TEST_STRATEGY.md).
 
-- Device registry and enrollment services.
-- Location ingestion with idempotency.
-- Signed telemetry placeholder verification.
-- Device key registration and rotation flow.
-- Incident lifecycle APIs.
-- Remote action request APIs for policy-managed devices only.
-- Tenant-aware audit logs with hash chaining and chain verification endpoint.
-- Security hardening placeholders for JWT verification and Play Integrity classification.
+## Product Rules
 
-### Web Admin Console
+These rules shape both the code and the documentation:
 
-- Login shell.
-- Device inventory and device details.
-- Map and last known location view.
-- Incident case management.
-- Geofence management.
-- Audit log viewer.
-- Remote action approvals.
-- Settings and data retention views.
-- Mock API mode for local frontend work.
+- no stealth tracking
+- no hidden activation
+- no secret camera, microphone, or screenshot capture
+- no bypassing Android or Play policy
+- no reliance on IMEI, IMSI, or serial for core identity
+- no pretending approximate location is exact
+- no background tracking without visible consent
 
-## Architecture Summary
+## Beginner-Friendly System Overview
 
-### Android
+### 1. Android app
 
-- Language: Kotlin
-- UI: Jetpack Compose
-- DI: Hilt
-- Persistence: Room
-- Background work: WorkManager
-- Networking: Retrofit + Kotlin serialization
-- Patterns: MVVM + Clean Architecture
+The Android app is the visible device client.
 
-### Backend
+Its job is to:
 
-- Framework: FastAPI
-- Database: PostgreSQL + PostGIS
-- Auth: JWT-ready role and tenant checks
-- Security: signed telemetry placeholder, audit chain, rate limiting
+- explain the product clearly
+- collect consent
+- request permissions in a staged way
+- store local device and incident state
+- collect lawful location signals
+- run scheduled check-ins with WorkManager
+- show the user that the device is protected or managed
 
-### Admin Console
+### 2. Backend
 
-- Framework: Next.js App Router
-- Language: TypeScript
-- UI: custom reusable component system
+The backend is the shared source of truth.
 
-## Repository Structure
+Its job is to:
+
+- manage tenants, devices, and enrollments
+- store telemetry and incident history
+- enforce role and tenant checks
+- verify signed telemetry placeholders
+- record audit logs
+- decide whether remote actions are allowed
+
+### 3. Admin console
+
+The admin console is the operator interface.
+
+Its job is to:
+
+- show device inventory
+- show incident timelines
+- show last known location and confidence
+- require confirmation and reason text for sensitive actions
+- make operator behavior visible and auditable
+
+## Repository Map
 
 ```text
 TrackMe/
-  app/                 Android client
-  backend/             FastAPI backend
-  admin-console/       Next.js admin console
-  gradle/              Android Gradle wrapper files
-  build.gradle.kts     Root Android build config
-  settings.gradle.kts  Android module settings
+├── app/                 Android app
+├── backend/             FastAPI backend
+├── admin-console/       Next.js admin console
+├── docs/                Student-friendly architecture guides
+├── TEST_STRATEGY.md     Full test planning document
+└── README.md            Project entry point
 ```
+
+## Why Android Background Limits Matter
+
+Android background execution rules are a core design constraint, not a small implementation detail.
+
+That is why the app uses:
+
+- WorkManager instead of covert long-running background loops
+- low-frequency normal mode check-ins
+- a time-boxed lost mode instead of permanent escalation
+- visible foreground/background location permission education
+
+This is both a technical reality and a compliance requirement. A lawful recovery app has to work with Android, not against it.
+
+## Why IMEI, IMSI, and Serial Are Not Core
+
+A beginner may ask:
+
+"Why not identify the device mainly by IMEI or serial number?"
+
+Because that creates more problems than it solves:
+
+- Android restricts access to those identifiers
+- Play policy and privacy expectations are stricter around them
+- they are not necessary for the actual recovery workflow
+
+TrackMe instead uses:
+
+- explicit enrollment records
+- backend-managed device IDs
+- consent state
+- device key registration
+- signed telemetry placeholders
+- auditable incident history
+
+This is a more portable and policy-safe design.
+
+## Why IP and Tower Methods Are Approximate
+
+Not every coordinate is equally trustworthy.
+
+For example:
+
+- GPS or fused location can sometimes be precise
+- network provider may be less precise
+- IP geolocation is often only city-level or region-level
+- tower-based estimates are based on radio infrastructure, not direct device position
+
+That is why TrackMe classifies location evidence as:
+
+- `precise`
+- `moderate`
+- `approximate`
+
+Approximate methods are useful as fallback context, but they must never be marketed as exact recovery coordinates.
+
+## Normal Mode vs Lost Mode
+
+### Normal mode
+
+Normal mode is the default state.
+
+It focuses on:
+
+- lower battery use
+- lower bandwidth use
+- periodic accountability check-ins
+
+### Lost mode
+
+Lost mode is a temporary escalation for a recovery incident.
+
+It focuses on:
+
+- more frequent check-ins
+- stronger location collection attempts within platform limits
+- visible incident state
+- time-boxed behavior so the device does not remain in permanent high-frequency tracking mode
+
+## Current Code Highlights
+
+### Android app
+
+Important starting points:
+
+- [`app/src/main/java/com/example/trackme/app/TrackMeRootApp.kt`](./app/src/main/java/com/example/trackme/app/TrackMeRootApp.kt)
+- [`app/src/main/java/com/example/trackme/feature/onboarding/OnboardingConsentScreen.kt`](./app/src/main/java/com/example/trackme/feature/onboarding/OnboardingConsentScreen.kt)
+- [`app/src/main/java/com/example/trackme/domain/usecase/PerformCheckInUseCase.kt`](./app/src/main/java/com/example/trackme/domain/usecase/PerformCheckInUseCase.kt)
+- [`app/src/main/java/com/example/trackme/location/LocationFusionEngine.kt`](./app/src/main/java/com/example/trackme/location/LocationFusionEngine.kt)
+- [`app/src/main/java/com/example/trackme/worker/CheckInSchedulerImpl.kt`](./app/src/main/java/com/example/trackme/worker/CheckInSchedulerImpl.kt)
+
+### Backend
+
+Important starting points:
+
+- [`backend/app/main.py`](./backend/app/main.py)
+- [`backend/app/api/v1/endpoints/platform.py`](./backend/app/api/v1/endpoints/platform.py)
+- [`backend/app/core/security.py`](./backend/app/core/security.py)
+- [`backend/app/services/location_ingestion_service.py`](./backend/app/services/location_ingestion_service.py)
+- [`backend/app/services/audit_log_service.py`](./backend/app/services/audit_log_service.py)
+
+### Admin console
+
+Important starting points:
+
+- [`admin-console/src/app/(dashboard)/devices/page.tsx`](./admin-console/src/app/(dashboard)/devices/page.tsx)
+- [`admin-console/src/app/(dashboard)/map/page.tsx`](./admin-console/src/app/(dashboard)/map/page.tsx)
+- [`admin-console/src/components/common/SensitiveActionModal.tsx`](./admin-console/src/components/common/SensitiveActionModal.tsx)
+- [`admin-console/src/lib/api/client.ts`](./admin-console/src/lib/api/client.ts)
 
 ## Local Development
 
-### Android App
+### Android
 
 ```bash
 ./gradlew installDebug
 ./gradlew testDebugUnitTest
 ```
-
-Requirements:
-- Android Studio
-- Android SDK
-- USB debugging enabled for on-device testing if using physical hardware
 
 ### Backend
 
@@ -128,14 +237,7 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-Or with Docker:
-
-```bash
-cd backend
-docker compose up --build
-```
-
-### Admin Console
+### Admin console
 
 ```bash
 cd admin-console
@@ -143,31 +245,31 @@ npm install
 npm run dev
 ```
 
-## Security and Misuse Resistance
+## Current Verification
 
-- Explicit tracking consent is required before scheduled check-ins run.
-- Lost mode is time-boxed and visible in the app workflow.
-- Tenant checks are enforced across sensitive backend endpoints.
-- Audit logs are hash-chained for tamper evidence.
-- Remote wipe requires elevated confirmation and tradeoff acknowledgement.
-- Telemetry verification currently uses a placeholder design and must be upgraded before production.
-- Play Integrity verification is currently a placeholder assessment path and not final production verification.
+- Android unit tests pass with `./gradlew testDebugUnitTest`
+- Backend tests pass with `PYTHONPATH=backend pytest -q backend/tests`
 
-## Verification Completed In This Workspace
+## Production Gaps To Understand
 
-- Backend tests passing with `PYTHONPATH=backend pytest -q backend/tests`
-- Android unit tests passing with `./gradlew testDebugUnitTest`
+This repository already has the right structure, but some security pieces are still placeholders and should be upgraded before production:
 
-## Production Readiness Notes
+- replace placeholder telemetry signing with Android Keystore-backed asymmetric signing
+- replace placeholder Play Integrity classification with real server-side verification
+- replace development JWT fallback with strict OIDC/JWKS verification in deployed environments
+- harden audit storage with stronger database-level immutability controls
 
-This repository is a strong foundation, but not production-finished. Before production use, the following should be completed:
+## How To Use This Repo As a Student
 
-- Replace placeholder telemetry signing with Android Keystore-backed asymmetric signing.
-- Replace placeholder integrity assessment with real Play Integrity server-side verification.
-- Replace development JWT fallback with strict OIDC/JWKS verification in all deployed environments.
-- Add production deployment, monitoring, and secret management.
-- Complete frontend dependency install and backend wiring for the admin console in the target environment.
+If you are new to Android and backend systems, use this rule:
+
+- start from the screens and read inward
+- then read the use cases
+- then read repositories
+- then read workers and services
+
+That sequence makes the codebase much easier to understand than jumping straight into low-level details.
 
 ## License
 
-No license file is currently included in this repository.
+No license file is included yet.
