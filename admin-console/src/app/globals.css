@@ -1,0 +1,143 @@
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-muted: #f0f2f4;
+  --text: #12202f;
+  --text-muted: #556576;
+  --border: #d5dde5;
+  --primary: #006f8b;
+  --primary-contrast: #ffffff;
+  --danger: #bf1e2e;
+  --success: #127a41;
+  --warning: #9a6c00;
+  --approximate: #6b7280;
+  --moderate: #a16207;
+  --precise: #0f766e;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgb(18 32 47 / 7%), 0 10px 18px rgb(18 32 47 / 4%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e151c;
+    --surface: #16202b;
+    --surface-muted: #1f2b37;
+    --text: #e7eef5;
+    --text-muted: #a7b8ca;
+    --border: #2b3a49;
+    --primary: #15a4c3;
+    --primary-contrast: #03161d;
+    --danger: #ef5d6a;
+    --success: #2fbe72;
+    --warning: #f0b548;
+    --approximate: #a3afbe;
+    --moderate: #f0b548;
+    --precise: #34d0c4;
+    --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 12px 28px rgb(0 0 0 / 20%);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  font-family: "Segoe UI", "Noto Sans", "Helvetica Neue", sans-serif;
+  background: radial-gradient(circle at top right, rgb(0 111 139 / 8%), transparent 40%), var(--bg);
+  color: var(--text);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.container {
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+}
+
+.page {
+  padding: 20px;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.page-subtitle {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.grid-2 {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.grid-3 {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 980px) {
+  .grid-2,
+  .grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.warning-note {
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+}
+
+.code {
+  font-family: "Consolas", "Courier New", monospace;
+}
+
+@keyframes loadingShimmer {
+  0% {
+    background-position: -220px 0;
+  }
+  100% {
+    background-position: 220px 0;
+  }
+}

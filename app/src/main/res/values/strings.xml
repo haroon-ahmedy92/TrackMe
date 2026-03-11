@@ -1,0 +1,95 @@
+<resources>
+    <string name="app_name">TrackMe Protect</string>
+
+    <string name="loading">Loading…</string>
+    <string name="managed_state_banner">This device is protected/managed</string>
+
+    <string name="tab_home">Home</string>
+    <string name="tab_status">Status</string>
+    <string name="tab_lost_mode">Lost Mode</string>
+    <string name="tab_map">Map</string>
+    <string name="tab_incidents">Incidents</string>
+    <string name="tab_settings">Settings</string>
+    <string name="tab_audit">Audit</string>
+
+    <string name="onboarding_title">Welcome to Device Recovery &amp; Protection</string>
+    <string name="onboarding_description">This app helps recover owner-enrolled or organization-managed devices through visible, lawful controls.</string>
+    <string name="permission_education_body">Location access is requested only for recovery check-ins. No hidden tracking, no covert recording, and no attempts to bypass Android permissions.</string>
+    <string name="consent_checkbox_label">I understand and consent to visible recovery/management tracking for this device.</string>
+    <string name="request_foreground_location">Grant Foreground Location</string>
+    <string name="foreground_granted">Foreground location permission: granted</string>
+    <string name="foreground_not_granted">Foreground location permission: not granted</string>
+    <string name="background_permission_explain">Background location improves lawful recovery check-ins while the app is not open. Android may require granting this in Settings.</string>
+    <string name="request_background_location">Enable Background Location</string>
+    <string name="skip_background_for_now">Skip for now</string>
+    <string name="background_granted">Background location permission: granted</string>
+    <string name="background_not_granted">Background location permission: not granted/optional</string>
+    <string name="continue_to_enrollment">Continue to Enrollment</string>
+
+    <string name="enrollment_title">Device Enrollment</string>
+    <string name="organization_name">Organization name</string>
+    <string name="authorization_checkbox">I am the owner or an authorized administrator for this device enrollment.</string>
+    <string name="enroll_device">Enroll Device</string>
+
+    <string name="home_title">Home Dashboard</string>
+    <string name="organization_label">Organization: %1$s</string>
+    <string name="last_check_in_label">Last check-in: %1$s</string>
+    <string name="mode_label">Mode: %1$s</string>
+    <string name="battery_label">Battery: %1$s</string>
+
+    <string name="device_status_title">Device Status</string>
+    <string name="consent_version_label">Consent version: %1$s</string>
+    <string name="enrolled_at_label">Enrolled at: %1$s</string>
+    <string name="lost_mode_until_label">Lost mode until: %1$s</string>
+    <string name="location_method_label">Location method: %1$s</string>
+    <string name="location_confidence_label">Location confidence: %1$s/100</string>
+    <string name="location_approximate_label">Approximate source: %1$s</string>
+
+    <string name="lost_mode_title">Live / Lost Mode</string>
+    <string name="lost_mode_description">Use lost mode only during active recovery incidents. It is visible, explicit, and time-boxed.</string>
+    <string name="lost_mode_status">Lost mode status: %1$s</string>
+    <string name="enable_lost_mode_12h">Enable Lost Mode (12h)</string>
+    <string name="enable_lost_mode_24h">Enable Lost Mode (24h)</string>
+    <string name="disable_lost_mode">Disable Lost Mode</string>
+
+    <string name="map_title">Map</string>
+    <string name="map_provider_label">Map provider abstraction: %1$s</string>
+    <string name="map_marker_title">Marker title: %1$s</string>
+    <string name="location_lat_lng">Lat/Lng: %1$s, %2$s</string>
+    <string name="map_todo_backend">TODO: Connect Google Maps SDK/Mapbox rendering + backend tiles/overlays.</string>
+    <string name="no_location_yet">No location points yet.</string>
+
+    <string name="incidents_title">Incidents</string>
+    <string name="incidents_description">Start a recovery incident and request remote actions only where policy-managed support exists.</string>
+    <string name="incident_state_label">Incident state: %1$s</string>
+    <string name="ticket_reference">Ticket reference</string>
+    <string name="recovery_message_label">Visible recovery message</string>
+    <string name="elevated_confirmation_label">Elevated confirmation phrase</string>
+    <string name="elevated_confirmation_hint">Type CONFIRM_STOLEN to authorize confirmed stolen/wipe actions.</string>
+    <string name="incident_action_reason_label">Reason for sensitive action</string>
+    <string name="wipe_delay_minutes_label">Wipe delay minutes (0 = immediate)</string>
+    <string name="start_lost_incident">Start Lost Incident (12h Lost Mode)</string>
+    <string name="confirm_stolen_incident">Confirm Stolen (Elevated)</string>
+    <string name="request_remote_lock">Request Remote Lock</string>
+    <string name="request_remote_wipe">Request Remote Wipe</string>
+    <string name="mark_recovered">Mark Recovered</string>
+    <string name="cancel_incident">Cancel Incident</string>
+    <string name="decommission_device">Decommission Device</string>
+    <string name="visible_recovery_message_title">Visible Recovery Message</string>
+    <string name="wipe_tradeoff_ack_label">I understand wiping may protect data but reduce physical recovery chances.</string>
+    <string name="wipe_confirm_ack_label">I confirm this wipe request is lawful and authorized.</string>
+    <string name="wipe_tradeoff_text">Tradeoff: wiping may protect data but may reduce chances of recovering the physical device.</string>
+    <string name="incident_lost_until_label">Incident lost-mode window: %1$s</string>
+    <string name="incident_wipe_scheduled_label">Scheduled wipe execution: %1$s</string>
+    <string name="evidence_timeline_label">Evidence Timeline</string>
+    <string name="remote_action_policy_note">Remote lock/wipe works only on policy-managed devices. All attempts are audited.</string>
+
+    <string name="settings_privacy_title">Settings &amp; Privacy</string>
+    <string name="settings_privacy_disclosure">Recovery features are consent-based and visible. This app does not hide itself or perform covert surveillance.</string>
+    <string name="geofence_opt_in">Enable geofence asset protection (opt-in)</string>
+    <string name="geofence_radius_label">Geofence radius: %1$s meters</string>
+    <string name="settings_backend_todo">TODO: Sync policy settings with backend organization profile.</string>
+
+    <string name="audit_title">Audit History</string>
+    <string name="audit_empty">No audit events yet.</string>
+</resources>

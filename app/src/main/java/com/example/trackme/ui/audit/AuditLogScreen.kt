@@ -1,0 +1,63 @@
+package com.example.trackme.ui.audit
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Card
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.trackme.ui.common.formatEpochMillis
+
+@Composable
+fun AuditLogScreen(
+    paddingValues: PaddingValues,
+    viewModel: AuditLogViewModel = hiltViewModel()
+) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(text = "Audit Trail", style = MaterialTheme.typography.headlineSmall)
+        Text(
+            text = "Append-only local events for recovery actions and consent history.",
+            style = MaterialTheme.typography.bodyMedium
+        )
+
+        if (state.events.isEmpty()) {
+            Text("No audit events yet.")
+            return@Column
+        }
+
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(state.events, key = { it.id }) { event ->
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(event.type, style = MaterialTheme.typography.titleSmall)
+                        Text(event.summary)
+                        Text("At: ${formatEpochMillis(event.createdAtEpochMs)}")
+                        Text("Hash: ${event.eventHash.take(16)}...")
+                    }
+                }
+            }
+        }
+    }
+}
