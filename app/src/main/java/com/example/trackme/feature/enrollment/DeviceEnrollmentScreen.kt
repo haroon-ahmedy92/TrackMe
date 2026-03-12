@@ -1,13 +1,8 @@
 package com.example.trackme.feature.enrollment
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -23,6 +18,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.trackme.R
 import com.example.trackme.core.ui.AsyncUiState
+import com.example.trackme.feature.common.EmptyStateCard
+import com.example.trackme.feature.common.InfoCallout
+import com.example.trackme.feature.common.SectionCard
+import com.example.trackme.feature.common.TrackMeScreen
 
 @Composable
 fun DeviceEnrollmentScreen(
@@ -32,46 +31,69 @@ fun DeviceEnrollmentScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     when (val state = uiState) {
-        AsyncUiState.Loading -> Text(text = stringResource(id = R.string.loading))
-        is AsyncUiState.Error -> Text(text = state.message, color = MaterialTheme.colorScheme.error)
+        AsyncUiState.Loading -> TrackMeScreen(
+            title = stringResource(id = R.string.enrollment_title),
+            subtitle = "Preparing organization-owned or authorized enrollment."
+        ) {
+            EmptyStateCard(title = "Loading", body = stringResource(id = R.string.loading))
+        }
+
+        is AsyncUiState.Error -> TrackMeScreen(
+            title = stringResource(id = R.string.enrollment_title),
+            subtitle = "Preparing organization-owned or authorized enrollment."
+        ) {
+            EmptyStateCard(title = "Enrollment unavailable", body = state.message)
+        }
+
         is AsyncUiState.Data -> {
             val form = state.value
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+            TrackMeScreen(
+                title = stringResource(id = R.string.enrollment_title),
+                subtitle = "Only device owners or authorized administrators should continue."
             ) {
-                Text(
-                    text = stringResource(id = R.string.enrollment_title),
-                    style = MaterialTheme.typography.headlineSmall
-                )
-                Text(text = viewModel.disclosure.title)
-                viewModel.disclosure.bulletPoints.forEach {
-                    Text(text = "• $it")
+                InfoCallout(text = viewModel.disclosure.title)
+
+                SectionCard(
+                    title = "What this enrollment means",
+                    eyebrow = "Disclosure"
+                ) {
+                    viewModel.disclosure.bulletPoints.forEach { bullet ->
+                        Text(
+                            text = "• $bullet",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                 }
 
-                OutlinedTextField(
-                    value = form.organizationName,
-                    onValueChange = viewModel::onOrganizationNameChanged,
-                    label = { Text(stringResource(id = R.string.organization_name)) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    Checkbox(
-                        checked = form.authorizationConfirmed,
-                        onCheckedChange = viewModel::onAuthorizationConfirmed
+                SectionCard(
+                    title = "Organization details",
+                    eyebrow = "Required fields"
+                ) {
+                    OutlinedTextField(
+                        value = form.organizationName,
+                        onValueChange = viewModel::onOrganizationNameChanged,
+                        label = { Text(stringResource(id = R.string.organization_name)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
                     )
-                    Text(
-                        text = stringResource(id = R.string.authorization_checkbox),
-                        modifier = Modifier.padding(top = 12.dp)
-                    )
-                }
 
-                form.errorMessage?.let {
-                    Text(text = it, color = MaterialTheme.colorScheme.error)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Checkbox(
+                            checked = form.authorizationConfirmed,
+                            onCheckedChange = viewModel::onAuthorizationConfirmed
+                        )
+                        Text(
+                            text = stringResource(id = R.string.authorization_checkbox),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+
+                    form.errorMessage?.let {
+                        Text(text = it, color = MaterialTheme.colorScheme.error)
+                    }
                 }
 
                 Button(
@@ -80,7 +102,10 @@ fun DeviceEnrollmentScreen(
                     enabled = !form.isSubmitting
                 ) {
                     if (form.isSubmitting) {
-                        CircularProgressIndicator(strokeWidth = 2.dp)
+                        CircularProgressIndicator(
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
                     } else {
                         Text(text = stringResource(id = R.string.enroll_device))
                     }

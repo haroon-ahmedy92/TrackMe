@@ -1,22 +1,20 @@
 package com.example.trackme.feature.status
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.trackme.R
 import com.example.trackme.core.ui.AsyncUiState
+import com.example.trackme.feature.common.ChipRow
+import com.example.trackme.feature.common.EmptyStateCard
 import com.example.trackme.feature.common.ManagedStateBanner
+import com.example.trackme.feature.common.MetricRow
+import com.example.trackme.feature.common.SectionCard
+import com.example.trackme.feature.common.StatusChip
+import com.example.trackme.feature.common.TrackMeScreen
 import com.example.trackme.ui.common.formatEpochMillis
 
 @Composable
@@ -25,28 +23,67 @@ fun DeviceStatusScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+    TrackMeScreen(
+        title = stringResource(id = R.string.device_status_title),
+        subtitle = "Consent, enrollment timing, and recovery telemetry quality."
     ) {
         ManagedStateBanner()
-        Text(text = stringResource(id = R.string.device_status_title), style = MaterialTheme.typography.headlineSmall)
 
         when (val state = uiState) {
-            AsyncUiState.Loading -> Text(stringResource(id = R.string.loading))
-            is AsyncUiState.Error -> Text(state.message, color = MaterialTheme.colorScheme.error)
+            AsyncUiState.Loading -> EmptyStateCard(
+                title = "Loading status",
+                body = stringResource(id = R.string.loading)
+            )
+            is AsyncUiState.Error -> EmptyStateCard(
+                title = "Status unavailable",
+                body = state.message
+            )
             is AsyncUiState.Data -> {
                 val dashboard = state.value
-                Card {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(stringResource(id = R.string.consent_version_label, dashboard.enrollment.consentVersion ?: "-"))
-                        Text(stringResource(id = R.string.enrolled_at_label, formatEpochMillis(dashboard.enrollment.enrolledAtEpochMs)))
-                        Text(stringResource(id = R.string.lost_mode_until_label, formatEpochMillis(dashboard.deviceState.lostModeUntilEpochMs)))
-                        Text(stringResource(id = R.string.location_method_label, dashboard.lastLocation?.methodLabel ?: "-"))
-                        Text(stringResource(id = R.string.location_confidence_label, dashboard.lastLocation?.confidenceScore?.toString() ?: "-"))
-                        Text(stringResource(id = R.string.location_approximate_label, dashboard.lastLocation?.isApproximate?.toString() ?: "-"))
+                SectionCard(
+                    title = "Enrollment",
+                    eyebrow = "Governance"
+                ) {
+                    MetricRow(label = "Consent version", value = dashboard.enrollment.consentVersion ?: "-")
+                    MetricRow(label = "Enrolled at", value = formatEpochMillis(dashboard.enrollment.enrolledAtEpochMs))
+                    MetricRow(label = "Lost mode until", value = formatEpochMillis(dashboard.deviceState.lostModeUntilEpochMs))
+                }
+
+                SectionCard(
+                    title = "Recovery telemetry",
+                    eyebrow = "Location quality"
+                ) {
+                    val location = dashboard.lastLocation
+                    if (location == null) {
+                        MetricRow(label = "Last location", value = "No sample collected yet")
+                    } else {
+                        ChipRow(
+                            {
+                                StatusChip(
+                                    label = if (location.isApproximate) "Approximate source" else "Higher-confidence source",
+                                    containerColor = if (location.isApproximate) {
+                                        MaterialTheme.colorScheme.tertiaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    },
+                                    contentColor = if (location.isApproximate) {
+                                        MaterialTheme.colorScheme.onTertiaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    }
+                                )
+                            },
+                            {
+                                StatusChip(
+                                    label = "${location.confidenceScore}/100 confidence",
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                        )
+                        MetricRow(label = "Method", value = location.methodLabel, emphasize = true)
+                        MetricRow(label = "Timestamp", value = formatEpochMillis(location.capturedAtEpochMs))
+                        MetricRow(label = "Precision", value = if (location.isApproximate) "Approximate" else "Moderate or precise")
                     }
                 }
             }

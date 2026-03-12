@@ -1,10 +1,6 @@
 package com.example.trackme.feature.lostmode
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -13,12 +9,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.trackme.R
 import com.example.trackme.core.ui.AsyncUiState
+import com.example.trackme.feature.common.EmptyStateCard
+import com.example.trackme.feature.common.InfoCallout
 import com.example.trackme.feature.common.ManagedStateBanner
+import com.example.trackme.feature.common.MetricRow
+import com.example.trackme.feature.common.SectionCard
+import com.example.trackme.feature.common.StatusChip
+import com.example.trackme.feature.common.TrackMeScreen
 import com.example.trackme.ui.common.formatEpochMillis
 
 @Composable
@@ -27,50 +28,75 @@ fun LostModeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+    TrackMeScreen(
+        title = stringResource(id = R.string.lost_mode_title),
+        subtitle = "A visible high-frequency mode for active recovery only."
     ) {
         ManagedStateBanner()
-        Text(text = stringResource(id = R.string.lost_mode_title), style = MaterialTheme.typography.headlineSmall)
-        Text(text = stringResource(id = R.string.lost_mode_description))
+        InfoCallout(text = stringResource(id = R.string.lost_mode_description))
 
         when (val state = uiState) {
-            AsyncUiState.Loading -> Text(stringResource(id = R.string.loading))
-            is AsyncUiState.Error -> Text(state.message, color = MaterialTheme.colorScheme.error)
+            AsyncUiState.Loading -> EmptyStateCard(
+                title = "Loading lost mode",
+                body = stringResource(id = R.string.loading)
+            )
+            is AsyncUiState.Error -> EmptyStateCard(
+                title = "Lost mode unavailable",
+                body = state.message
+            )
             is AsyncUiState.Data -> {
                 val content = state.value
-                Text(text = stringResource(id = R.string.lost_mode_status, if (content.enabled) "ON" else "OFF"))
-                Text(text = stringResource(id = R.string.lost_mode_until_label, formatEpochMillis(content.untilEpochMs)))
-
-                Button(
-                    onClick = { viewModel.enable(hours = 12) },
-                    enabled = !content.inProgress,
-                    modifier = Modifier.fillMaxWidth()
+                SectionCard(
+                    title = "Current mode",
+                    eyebrow = "Recovery cadence"
                 ) {
-                    Text(stringResource(id = R.string.enable_lost_mode_12h))
+                    StatusChip(
+                        label = if (content.enabled) "Lost mode active" else "Normal mode",
+                        containerColor = if (content.enabled) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = if (content.enabled) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    MetricRow(
+                        label = "Status",
+                        value = if (content.enabled) "ON" else "OFF",
+                        emphasize = true
+                    )
+                    MetricRow(
+                        label = "Ends at",
+                        value = formatEpochMillis(content.untilEpochMs)
+                    )
                 }
 
-                Button(
-                    onClick = { viewModel.enable(hours = 24) },
-                    enabled = !content.inProgress,
-                    modifier = Modifier.fillMaxWidth()
+                SectionCard(
+                    title = "Actions",
+                    eyebrow = "Time-boxed controls"
                 ) {
-                    Text(stringResource(id = R.string.enable_lost_mode_24h))
-                }
+                    Button(
+                        onClick = { viewModel.enable(hours = 12) },
+                        enabled = !content.inProgress,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(id = R.string.enable_lost_mode_12h))
+                    }
 
-                OutlinedButton(
-                    onClick = viewModel::disable,
-                    enabled = content.enabled && !content.inProgress,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(stringResource(id = R.string.disable_lost_mode))
-                }
+                    Button(
+                        onClick = { viewModel.enable(hours = 24) },
+                        enabled = !content.inProgress,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(id = R.string.enable_lost_mode_24h))
+                    }
 
-                content.errorMessage?.let {
-                    Text(it, color = MaterialTheme.colorScheme.error)
+                    OutlinedButton(
+                        onClick = viewModel::disable,
+                        enabled = content.enabled && !content.inProgress,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(id = R.string.disable_lost_mode))
+                    }
+
+                    content.errorMessage?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error)
+                    }
                 }
             }
         }

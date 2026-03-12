@@ -1,8 +1,16 @@
 package com.example.trackme.app
 
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -10,6 +18,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.trackme.R
@@ -69,16 +79,50 @@ fun TrackMeRootApp(
             if (enrolled == true) {
                 val backStack by navController.currentBackStackEntryAsState()
                 val destination = backStack?.destination
-                NavigationBar {
-                    tabs.forEach { tab ->
-                        NavigationBarItem(
-                            selected = destination?.hierarchy?.any { it.route == tab.destination.route } == true,
-                            onClick = {
-                                navController.navigate(tab.destination.route) { launchSingleTop = true }
-                            },
-                            icon = {},
-                            label = { Text(stringResource(id = tab.labelRes)) }
-                        )
+                Surface(shadowElevation = 10.dp) {
+                    NavigationBar(
+                        windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom),
+                        tonalElevation = 0.dp
+                    ) {
+                        tabs.forEach { tab ->
+                            NavigationBarItem(
+                                selected = destination?.hierarchy?.any { it.route == tab.destination.route } == true,
+                                onClick = {
+                                    navController.navigate(tab.destination.route) { launchSingleTop = true }
+                                },
+                                icon = {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = if (destination?.hierarchy?.any { it.route == tab.destination.route } == true) {
+                                            MaterialTheme.colorScheme.primaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.surfaceVariant
+                                        }
+                                    ) {
+                                        Text(
+                                            text = tab.glyph,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            style = MaterialTheme.typography.labelSmall
+                                        )
+                                    }
+                                },
+                                label = {
+                                    Text(
+                                        text = stringResource(id = tab.labelRes),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                },
+                                alwaysShowLabel = false,
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                                    selectedTextColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                                    indicatorColor = androidx.compose.material3.MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
+                                    unselectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+                                    unselectedTextColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                        }
                     }
                 }
             }
@@ -115,5 +159,15 @@ fun TrackMeRootApp(
 
 private data class TabSpec(
     val destination: AppDestination,
-    val labelRes: Int
+    val labelRes: Int,
+    val glyph: String = when (destination) {
+        AppDestination.Home -> "HM"
+        AppDestination.DeviceStatus -> "ST"
+        AppDestination.LostMode -> "LM"
+        AppDestination.Map -> "MP"
+        AppDestination.Incidents -> "IN"
+        AppDestination.Settings -> "SE"
+        AppDestination.Audit -> "AU"
+        else -> "HM"
+    }
 )

@@ -1,18 +1,10 @@
 package com.example.trackme.feature.incidents
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -27,7 +19,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.trackme.R
 import com.example.trackme.core.ui.AsyncUiState
+import com.example.trackme.feature.common.EmptyStateCard
+import com.example.trackme.feature.common.InfoCallout
 import com.example.trackme.feature.common.ManagedStateBanner
+import com.example.trackme.feature.common.MetricRow
+import com.example.trackme.feature.common.SectionCard
+import com.example.trackme.feature.common.StatusChip
+import com.example.trackme.feature.common.TrackMeScreen
 import com.example.trackme.ui.common.formatEpochMillis
 
 @Composable
@@ -37,163 +35,181 @@ fun IncidentsScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     when (val state = uiState) {
-        AsyncUiState.Loading -> Text(stringResource(id = R.string.loading))
-        is AsyncUiState.Error -> Text(state.message, color = MaterialTheme.colorScheme.error)
+        AsyncUiState.Loading -> TrackMeScreen(
+            title = stringResource(id = R.string.incidents_title),
+            subtitle = stringResource(id = R.string.incidents_description)
+        ) {
+            EmptyStateCard(title = "Loading incidents", body = stringResource(id = R.string.loading))
+        }
+
+        is AsyncUiState.Error -> TrackMeScreen(
+            title = stringResource(id = R.string.incidents_title),
+            subtitle = stringResource(id = R.string.incidents_description)
+        ) {
+            EmptyStateCard(title = "Incident controls unavailable", body = state.message)
+        }
+
         is AsyncUiState.Data -> {
             val content = state.value
 
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+            TrackMeScreen(
+                title = stringResource(id = R.string.incidents_title),
+                subtitle = stringResource(id = R.string.incidents_description)
             ) {
                 ManagedStateBanner()
-                Text(text = stringResource(id = R.string.incidents_title), style = MaterialTheme.typography.headlineSmall)
-                Text(text = stringResource(id = R.string.incidents_description))
-                Text(
-                    text = stringResource(id = R.string.incident_state_label, content.incidentState.name),
-                    color = MaterialTheme.colorScheme.primary
-                )
 
-                content.recoveryMessage.takeIf { it.isNotBlank() }?.let { message ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(stringResource(id = R.string.visible_recovery_message_title))
-                            Text(message)
-                        }
+                SectionCard(
+                    title = "Incident summary",
+                    eyebrow = "Current state"
+                ) {
+                    StatusChip(
+                        label = content.incidentState.name,
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    MetricRow(
+                        label = "Lost-mode window",
+                        value = formatEpochMillis(content.lostModeUntilEpochMs)
+                    )
+                    MetricRow(
+                        label = "Scheduled wipe",
+                        value = formatEpochMillis(content.wipeScheduledAtEpochMs)
+                    )
+                    content.statusMessage?.let {
+                        Text(text = it, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
 
-                OutlinedTextField(
-                    value = content.ticketReference,
-                    onValueChange = viewModel::onTicketChanged,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(id = R.string.ticket_reference)) }
-                )
-                OutlinedTextField(
-                    value = content.recoveryMessage,
-                    onValueChange = viewModel::onRecoveryMessageChanged,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(id = R.string.recovery_message_label)) }
-                )
-                OutlinedTextField(
-                    value = content.elevatedConfirmationText,
-                    onValueChange = viewModel::onElevatedConfirmationChanged,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(id = R.string.elevated_confirmation_label)) }
-                )
-                Text(
-                    text = stringResource(id = R.string.elevated_confirmation_hint),
-                    style = MaterialTheme.typography.bodySmall
-                )
-                OutlinedTextField(
-                    value = content.wipeReason,
-                    onValueChange = viewModel::onWipeReasonChanged,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(id = R.string.incident_action_reason_label)) }
-                )
-                OutlinedTextField(
-                    value = content.wipeDelayMinutes,
-                    onValueChange = viewModel::onWipeDelayChanged,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(id = R.string.wipe_delay_minutes_label)) }
-                )
-
-                RowCheckbox(
-                    checked = content.acknowledgedWipeTradeoff,
-                    onCheckedChange = viewModel::onAcknowledgeTradeoffChanged,
-                    label = stringResource(id = R.string.wipe_tradeoff_ack_label)
-                )
-                RowCheckbox(
-                    checked = content.confirmedWipeIntent,
-                    onCheckedChange = viewModel::onConfirmWipeIntentChanged,
-                    label = stringResource(id = R.string.wipe_confirm_ack_label)
-                )
-
-                Button(
-                    onClick = viewModel::markAsLost,
-                    enabled = !content.inProgress,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(stringResource(id = R.string.start_lost_incident))
-                }
-                Button(
-                    onClick = viewModel::confirmStolen,
-                    enabled = !content.inProgress,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(stringResource(id = R.string.confirm_stolen_incident))
-                }
-                Button(
-                    onClick = viewModel::requestRemoteLock,
-                    enabled = !content.inProgress,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(stringResource(id = R.string.request_remote_lock))
-                }
-                Button(
-                    onClick = viewModel::requestRemoteWipe,
-                    enabled = !content.inProgress,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(stringResource(id = R.string.request_remote_wipe))
-                }
-                OutlinedButton(
-                    onClick = viewModel::recover,
-                    enabled = !content.inProgress,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(stringResource(id = R.string.mark_recovered))
-                }
-                OutlinedButton(
-                    onClick = viewModel::cancelIncident,
-                    enabled = !content.inProgress,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(stringResource(id = R.string.cancel_incident))
-                }
-                OutlinedButton(
-                    onClick = viewModel::decommission,
-                    enabled = !content.inProgress,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(stringResource(id = R.string.decommission_device))
+                content.recoveryMessage.takeIf { it.isNotBlank() }?.let { message ->
+                    InfoCallout(text = message)
                 }
 
-                Text(
-                    text = stringResource(id = R.string.wipe_tradeoff_text),
-                    color = MaterialTheme.colorScheme.secondary
-                )
-                Text(
-                    text = stringResource(id = R.string.remote_action_policy_note),
-                    color = MaterialTheme.colorScheme.secondary
-                )
-                Text(
-                    text = stringResource(id = R.string.incident_lost_until_label, formatEpochMillis(content.lostModeUntilEpochMs))
-                )
-                Text(
-                    text = stringResource(id = R.string.incident_wipe_scheduled_label, formatEpochMillis(content.wipeScheduledAtEpochMs))
-                )
-                content.statusMessage?.let { Text(it) }
-
-                HorizontalDivider()
-                Text(
-                    text = stringResource(id = R.string.evidence_timeline_label),
-                    style = MaterialTheme.typography.titleMedium
-                )
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                SectionCard(
+                    title = "Recovery details",
+                    eyebrow = "Authorization"
                 ) {
-                    items(content.timeline, key = { it.id }) { event ->
-                        Card(modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text("${event.action} (${event.state.name})", style = MaterialTheme.typography.labelLarge)
-                                Text(event.summary)
-                                Text(formatEpochMillis(event.createdAtEpochMs), style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(
+                        value = content.ticketReference,
+                        onValueChange = viewModel::onTicketChanged,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(id = R.string.ticket_reference)) }
+                    )
+                    OutlinedTextField(
+                        value = content.recoveryMessage,
+                        onValueChange = viewModel::onRecoveryMessageChanged,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(id = R.string.recovery_message_label)) }
+                    )
+                    OutlinedTextField(
+                        value = content.elevatedConfirmationText,
+                        onValueChange = viewModel::onElevatedConfirmationChanged,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(id = R.string.elevated_confirmation_label)) }
+                    )
+                    Text(
+                        text = stringResource(id = R.string.elevated_confirmation_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = content.wipeReason,
+                        onValueChange = viewModel::onWipeReasonChanged,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(id = R.string.incident_action_reason_label)) }
+                    )
+                    OutlinedTextField(
+                        value = content.wipeDelayMinutes,
+                        onValueChange = viewModel::onWipeDelayChanged,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(id = R.string.wipe_delay_minutes_label)) }
+                    )
+                    RowCheckbox(
+                        checked = content.acknowledgedWipeTradeoff,
+                        onCheckedChange = viewModel::onAcknowledgeTradeoffChanged,
+                        label = stringResource(id = R.string.wipe_tradeoff_ack_label)
+                    )
+                    RowCheckbox(
+                        checked = content.confirmedWipeIntent,
+                        onCheckedChange = viewModel::onConfirmWipeIntentChanged,
+                        label = stringResource(id = R.string.wipe_confirm_ack_label)
+                    )
+                }
+
+                SectionCard(
+                    title = "Sensitive actions",
+                    eyebrow = "Visible workflow"
+                ) {
+                    Button(
+                        onClick = viewModel::markAsLost,
+                        enabled = !content.inProgress,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(id = R.string.start_lost_incident))
+                    }
+                    Button(
+                        onClick = viewModel::confirmStolen,
+                        enabled = !content.inProgress,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(id = R.string.confirm_stolen_incident))
+                    }
+                    Button(
+                        onClick = viewModel::requestRemoteLock,
+                        enabled = !content.inProgress,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(id = R.string.request_remote_lock))
+                    }
+                    Button(
+                        onClick = viewModel::requestRemoteWipe,
+                        enabled = !content.inProgress,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(id = R.string.request_remote_wipe))
+                    }
+                    OutlinedButton(
+                        onClick = viewModel::recover,
+                        enabled = !content.inProgress,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(id = R.string.mark_recovered))
+                    }
+                    OutlinedButton(
+                        onClick = viewModel::cancelIncident,
+                        enabled = !content.inProgress,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(id = R.string.cancel_incident))
+                    }
+                    OutlinedButton(
+                        onClick = viewModel::decommission,
+                        enabled = !content.inProgress,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(id = R.string.decommission_device))
+                    }
+                }
+
+                InfoCallout(text = stringResource(id = R.string.wipe_tradeoff_text))
+                InfoCallout(text = stringResource(id = R.string.remote_action_policy_note))
+
+                SectionCard(
+                    title = stringResource(id = R.string.evidence_timeline_label),
+                    eyebrow = "Audit-backed history"
+                ) {
+                    if (content.timeline.isEmpty()) {
+                        Text(
+                            text = "No incident events yet.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        content.timeline.forEach { event ->
+                            SectionCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                title = "${event.action} (${event.state.name})",
+                                eyebrow = formatEpochMillis(event.createdAtEpochMs)
+                            ) {
+                                Text(text = event.summary)
                             }
                         }
                     }
@@ -214,6 +230,9 @@ private fun RowCheckbox(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Checkbox(checked = checked, onCheckedChange = onCheckedChange)
-        Text(label)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium
+        )
     }
 }
