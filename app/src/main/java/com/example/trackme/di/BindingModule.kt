@@ -4,7 +4,11 @@ import com.example.trackme.compliance.CompliancePolicy
 import com.example.trackme.compliance.DefaultCompliancePolicy
 import com.example.trackme.core.HashTelemetrySigner
 import com.example.trackme.core.TelemetrySigner
+import com.example.trackme.core.security.AndroidKeystoreDeviceKeyMaterialGenerator
+import com.example.trackme.core.security.DeviceKeyMaterialGenerator
 import com.example.trackme.data.repository.AuditRepositoryImpl
+import com.example.trackme.feature.enrollment.DefaultEnrollmentCoordinator
+import com.example.trackme.feature.enrollment.EnrollmentCoordinator
 import com.example.trackme.data.repository.DeviceCapabilityRepositoryImpl
 import com.example.trackme.data.repository.DeviceStateRepositoryImpl
 import com.example.trackme.data.repository.DeviceManagementRepositoryImpl
@@ -65,6 +69,10 @@ abstract class BindingModule {
     @Binds
     @Singleton
     abstract fun bindEnrollmentRepository(impl: EnrollmentRepositoryImpl): EnrollmentRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindEnrollmentCoordinator(impl: DefaultEnrollmentCoordinator): EnrollmentCoordinator
 
     @Binds
     @Singleton
@@ -149,6 +157,10 @@ abstract class BindingModule {
     @Binds
     @Singleton
     abstract fun bindTelemetrySigner(impl: HashTelemetrySigner): TelemetrySigner
+
+    @Binds
+    @Singleton
+    abstract fun bindDeviceKeyMaterialGenerator(impl: AndroidKeystoreDeviceKeyMaterialGenerator): DeviceKeyMaterialGenerator
 
     @Binds
     @Singleton

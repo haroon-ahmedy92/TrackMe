@@ -77,6 +77,11 @@ class Device(Base):
     enrollments: Mapped[list['Enrollment']] = relationship(back_populates='device')
     geofences: Mapped[list['Geofence']] = relationship(back_populates='device')
     remote_actions: Mapped[list['RemoteAction']] = relationship(back_populates='device')
+    ownership_bindings: Mapped[list['DeviceOwnershipBinding']] = relationship()
+    access_policies: Mapped[list['DeviceAccessPolicy']] = relationship()
+    pairing_tokens: Mapped[list['PairingToken']] = relationship()
+    ownership_transfers: Mapped[list['OwnershipTransfer']] = relationship()
+    access_reviews: Mapped[list['AccessReview']] = relationship()
 
 
 class TelemetryEvent(Base):
@@ -170,11 +175,38 @@ class UserRole(str, enum.Enum):
     OWNER = 'owner'
     ADMIN = 'admin'
     SECURITY = 'security'
+    SECURITY_OPERATOR = 'security_operator'
 
 
 class EnrollmentStatus(str, enum.Enum):
     ACTIVE = 'active'
     REVOKED = 'revoked'
+
+
+class OwnershipType(str, enum.Enum):
+    SINGLE_USER = 'single_user'
+    ORGANIZATION_OWNED = 'organization_owned'
+
+
+class OwnershipProofKind(str, enum.Enum):
+    ENROLLMENT_TOKEN = 'enrollment_token'
+    QR_CODE = 'qr_code'
+    ADMIN_APPROVAL = 'admin_approval'
+    TRANSFER_APPROVAL = 'transfer_approval'
+    MANUAL_REVIEW = 'manual_review'
+
+
+class AccessReviewStatus(str, enum.Enum):
+    PENDING = 'pending'
+    APPROVED = 'approved'
+    REJECTED = 'rejected'
+
+
+class OwnershipTransferStatus(str, enum.Enum):
+    PENDING = 'pending'
+    APPROVED = 'approved'
+    REJECTED = 'rejected'
+    CANCELLED = 'cancelled'
 
 
 class LocationPrecision(str, enum.Enum):
@@ -222,6 +254,11 @@ class Organization(Base):
 
     users: Mapped[list['User']] = relationship(back_populates='organization')
     devices: Mapped[list['Device']] = relationship()
+    ownership_bindings: Mapped[list['DeviceOwnershipBinding']] = relationship()
+    access_policies: Mapped[list['DeviceAccessPolicy']] = relationship()
+    pairing_tokens: Mapped[list['PairingToken']] = relationship()
+    ownership_transfers: Mapped[list['OwnershipTransfer']] = relationship()
+    access_reviews: Mapped[list['AccessReview']] = relationship()
 
 
 class User(Base):
@@ -240,6 +277,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     organization: Mapped['Organization'] = relationship(back_populates='users')
+    owned_device_bindings: Mapped[list['DeviceOwnershipBinding']] = relationship(foreign_keys='DeviceOwnershipBinding.owner_user_id')
 
 
 class Enrollment(Base):
@@ -275,6 +313,105 @@ class DeviceKey(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     rotated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class DeviceOwnershipBinding(Base):
+    __tablename__ = 'device_ownership_bindings'
+    __table_args__ = (
+        Index('ix_device_ownership_bindings_org_device_active', 'org_id', 'device_id', 'is_active'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('orgs.id'), nullable=False)
+    device_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('devices.id'), nullable=False)
+    owner_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=True)
+    ownership_type: Mapped[OwnershipType] = mapped_column(Enum(OwnershipType), nullable=False)
+    proof_kind: Mapped[OwnershipProofKind] = mapped_column(Enum(OwnershipProofKind), nullable=False)
+    proof_reference: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    consent_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    consent_captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    bound_by_sub: Mapped[str] = mapped_column(String(150), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class DeviceAccessPolicy(Base):
+    __tablename__ = 'device_access_policies'
+    __table_args__ = (
+        UniqueConstraint('device_id', name='uq_device_access_policies_device'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('orgs.id'), nullable=False)
+    device_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('devices.id'), nullable=False)
+    owner_can_locate: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    admin_can_locate: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    security_operator_can_review: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    require_access_review: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class PairingToken(Base):
+    __tablename__ = 'pairing_tokens'
+    __table_args__ = (
+        UniqueConstraint('token_hash', name='uq_pairing_tokens_hash'),
+        Index('ix_pairing_tokens_org_expires', 'org_id', 'expires_at'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('orgs.id'), nullable=False)
+    device_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey('devices.id'), nullable=True)
+    owner_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=True)
+    enrollment_type: Mapped[EnrollmentType] = mapped_column(Enum(EnrollmentType), nullable=False)
+    ownership_type: Mapped[OwnershipType] = mapped_column(Enum(OwnershipType), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    token_hint: Mapped[str] = mapped_column(String(16), nullable=False)
+    issued_by_sub: Mapped[str] = mapped_column(String(150), nullable=False)
+    proof_kind: Mapped[OwnershipProofKind] = mapped_column(Enum(OwnershipProofKind), nullable=False)
+    consent_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class OwnershipTransfer(Base):
+    __tablename__ = 'ownership_transfers'
+    __table_args__ = (
+        Index('ix_ownership_transfers_org_device_created', 'org_id', 'device_id', 'created_at'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('orgs.id'), nullable=False)
+    device_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('devices.id'), nullable=False)
+    from_owner_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=True)
+    to_owner_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=True)
+    requested_by_sub: Mapped[str] = mapped_column(String(150), nullable=False)
+    approved_by_sub: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    status: Mapped[OwnershipTransferStatus] = mapped_column(Enum(OwnershipTransferStatus), nullable=False)
+    reason: Mapped[str] = mapped_column(String(280), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AccessReview(Base):
+    __tablename__ = 'access_reviews'
+    __table_args__ = (
+        Index('ix_access_reviews_org_device_created', 'org_id', 'device_id', 'created_at'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('orgs.id'), nullable=False)
+    device_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('devices.id'), nullable=False)
+    requested_by_sub: Mapped[str] = mapped_column(String(150), nullable=False)
+    reviewed_by_sub: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    status: Mapped[AccessReviewStatus] = mapped_column(Enum(AccessReviewStatus), nullable=False)
+    rationale: Mapped[str] = mapped_column(String(280), nullable=False)
+    review_notes: Mapped[str | None] = mapped_column(String(280), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class LocationEvent(Base):

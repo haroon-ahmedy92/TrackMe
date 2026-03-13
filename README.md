@@ -39,6 +39,7 @@ The easiest learning path is:
 4. [`docs/location-engine.md`](./docs/location-engine.md)
 5. [`docs/security.md`](./docs/security.md)
 6. [`docs/testing.md`](./docs/testing.md)
+7. [`docs/ownership-enrollment-rbac.md`](./docs/ownership-enrollment-rbac.md)
 
 The larger test execution plan also lives in [`TEST_STRATEGY.md`](./TEST_STRATEGY.md).
 
@@ -193,6 +194,7 @@ Important starting points:
 
 - [`app/src/main/java/com/example/trackme/app/TrackMeRootApp.kt`](./app/src/main/java/com/example/trackme/app/TrackMeRootApp.kt)
 - [`app/src/main/java/com/example/trackme/feature/onboarding/OnboardingConsentScreen.kt`](./app/src/main/java/com/example/trackme/feature/onboarding/OnboardingConsentScreen.kt)
+- [`app/src/main/java/com/example/trackme/feature/enrollment/DeviceEnrollmentScreen.kt`](./app/src/main/java/com/example/trackme/feature/enrollment/DeviceEnrollmentScreen.kt)
 - [`app/src/main/java/com/example/trackme/domain/usecase/PerformCheckInUseCase.kt`](./app/src/main/java/com/example/trackme/domain/usecase/PerformCheckInUseCase.kt)
 - [`app/src/main/java/com/example/trackme/location/LocationFusionEngine.kt`](./app/src/main/java/com/example/trackme/location/LocationFusionEngine.kt)
 - [`app/src/main/java/com/example/trackme/worker/CheckInSchedulerImpl.kt`](./app/src/main/java/com/example/trackme/worker/CheckInSchedulerImpl.kt)
@@ -206,6 +208,8 @@ Important starting points:
 - [`backend/app/core/security.py`](./backend/app/core/security.py)
 - [`backend/app/services/location_ingestion_service.py`](./backend/app/services/location_ingestion_service.py)
 - [`backend/app/services/audit_log_service.py`](./backend/app/services/audit_log_service.py)
+- [`backend/app/api/v1/endpoints/ownership.py`](./backend/app/api/v1/endpoints/ownership.py)
+- [`backend/app/services/ownership_access_service.py`](./backend/app/services/ownership_access_service.py)
 
 ### Admin console
 

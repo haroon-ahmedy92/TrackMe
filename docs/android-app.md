@@ -84,6 +84,33 @@ Important files:
 - [`ManageIncidentLifecycleUseCase.kt`](../app/src/main/java/com/example/trackme/domain/usecase/ManageIncidentLifecycleUseCase.kt)
 - [`IncidentStateMachine.kt`](../app/src/main/java/com/example/trackme/domain/incident/IncidentStateMachine.kt)
 
+### Enrollment and Ownership Binding
+
+The enrollment flow is no longer just a single organization name field.
+
+The Android side now asks for:
+
+- ownership type
+- authorization role context
+- device alias
+- enrollment token or QR/link payload
+- owner subject when the device is single-user owned
+
+Important files:
+
+- [`DeviceEnrollmentScreen.kt`](../app/src/main/java/com/example/trackme/feature/enrollment/DeviceEnrollmentScreen.kt)
+- [`EnrollmentViewModel.kt`](../app/src/main/java/com/example/trackme/feature/enrollment/EnrollmentViewModel.kt)
+- [`EnrollmentCoordinator.kt`](../app/src/main/java/com/example/trackme/feature/enrollment/EnrollmentCoordinator.kt)
+- [`EnrollmentRepositoryImpl.kt`](../app/src/main/java/com/example/trackme/data/repository/EnrollmentRepositoryImpl.kt)
+- [`DeviceKeyMaterialGenerator.kt`](../app/src/main/java/com/example/trackme/core/security/DeviceKeyMaterialGenerator.kt)
+
+Why this matters:
+
+- the device user can see exactly what kind of enrollment is happening
+- the backend gets enough information to bind ownership correctly
+- the app can keep a local `pending backend verification` state when connectivity is poor
+
+
 ### `data/`
 
 This is where the app’s real persistence and network integrations live.

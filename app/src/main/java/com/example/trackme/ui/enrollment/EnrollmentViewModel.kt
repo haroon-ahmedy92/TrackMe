@@ -2,6 +2,10 @@ package com.example.trackme.ui.enrollment
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.trackme.domain.model.EnrollmentAuthorizationRole
+import com.example.trackme.domain.model.EnrollmentRequest
+import com.example.trackme.domain.model.OwnershipType
+import com.example.trackme.domain.model.PairingMethod
 import com.example.trackme.domain.repository.EnrollmentRepository
 import com.example.trackme.domain.usecase.EnrollDeviceUseCase
 import com.example.trackme.domain.usecase.GetEnrollmentDisclosureUseCase
@@ -56,8 +60,16 @@ class EnrollmentViewModel @Inject constructor(
             _uiState.update { it.copy(isSubmitting = true, errorMessage = null) }
             runCatching {
                 enrollDeviceUseCase(
-                    organizationName = state.organizationName.trim(),
-                    consentVersion = state.disclosure.version
+                    EnrollmentRequest(
+                        organizationName = state.organizationName.trim(),
+                        consentVersion = state.disclosure.version,
+                        deviceAlias = "Legacy Enrollment Device",
+                        ownerSubject = null,
+                        ownershipType = OwnershipType.ORGANIZATION_OWNED,
+                        authorizationRole = EnrollmentAuthorizationRole.ADMIN,
+                        pairingCredential = "legacy-local-enrollment",
+                        pairingMethod = PairingMethod.ENROLLMENT_TOKEN
+                    )
                 )
                 checkInScheduler.scheduleNormalCheckIn()
             }.onFailure {

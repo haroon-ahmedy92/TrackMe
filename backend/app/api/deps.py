@@ -16,6 +16,7 @@ from app.services.location_ingestion_service import LocationIngestionService
 from app.services.location_confidence import LocationConfidenceService
 from app.services.notification_event_service import NotificationEventService
 from app.services.notification_service import NoopNotificationService, NotificationService
+from app.services.ownership_access_service import OwnershipAccessService
 from app.services.remote_action_service import RemoteActionService
 from app.services.rules_engine_service import RulesEngineService
 from app.services.signed_telemetry_service import SignedTelemetryService
@@ -109,3 +110,7 @@ def get_notification_event_service() -> NotificationEventService:
 
 def get_geofence_service() -> GeofenceService:
     return GeofenceService()
+
+
+def get_ownership_access_service() -> OwnershipAccessService:
+    return OwnershipAccessService()

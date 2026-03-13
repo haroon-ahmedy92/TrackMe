@@ -15,6 +15,9 @@ interface RecoveryApi {
     @POST("v1/audit-events")
     suspend fun submitAuditEvent(@Body request: AuditEventRequest)
 
+    @POST("v1/ownership/pairings/complete")
+    suspend fun completePairing(@Body request: PairingCompleteRequestDto): OwnershipBindingResponseDto
+
     @POST("v1/incidents/mark-lost")
     suspend fun markDeviceLost(@Body request: MarkDeviceLostRequestDto): IncidentRecordResponseDto
 

@@ -1,5 +1,6 @@
 package com.example.trackme.data.network
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -44,4 +45,30 @@ data class AuditEventRequest(
     val metadataJson: String,
     val createdAtEpochMs: Long,
     val hash: String
+)
+
+@Serializable
+data class PairingCompleteRequestDto(
+    val token: String? = null,
+    val qrPayload: String? = null,
+    val alias: String,
+    val ownerSubject: String? = null,
+    val keyId: String,
+    val publicKeyPem: String,
+    val algorithm: String,
+)
+
+@Serializable
+data class OwnershipBindingResponseDto(
+    @SerialName("ownership_binding_id") val ownershipBindingId: String,
+    @SerialName("org_id") val orgId: String,
+    @SerialName("device_id") val deviceId: String,
+    @SerialName("owner_subject") val ownerSubject: String? = null,
+    @SerialName("ownership_type") val ownershipType: String,
+    @SerialName("proof_kind") val proofKind: String,
+    @SerialName("consent_version") val consentVersion: String,
+    @SerialName("consent_captured_at") val consentCapturedAt: String,
+    @SerialName("is_active") val isActive: Boolean,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("ended_at") val endedAt: String? = null,
 )

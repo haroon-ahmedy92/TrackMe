@@ -21,6 +21,7 @@ class Role(str, Enum):
     OWNER = 'owner'
     ADMIN = 'admin'
     SECURITY = 'security'
+    SECURITY_OPERATOR = 'security_operator'
     SUPER_ADMIN = 'super_admin'
     ORG_ADMIN = 'org_admin'
     INCIDENT_RESPONDER = 'incident_responder'

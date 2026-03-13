@@ -58,6 +58,22 @@ Instead, the design relies on:
 
 This is safer and more compliant.
 
+## Enrollment and Locate RBAC
+
+The new ownership flow adds a more specific rule than general JWT role checks:
+
+- `owner`, `admin`, `org_admin`, and `super_admin` are the roles that may reach locate workflows
+- `security_operator` may review ownership/access-review records but cannot locate a device by default
+- every locate request is audited whether it succeeds or fails
+
+Important files:
+
+- [`ownership.py`](../backend/app/api/v1/endpoints/ownership.py)
+- [`ownership_access_service.py`](../backend/app/services/ownership_access_service.py)
+- [`DeviceEnrollmentScreen.kt`](../app/src/main/java/com/example/trackme/feature/enrollment/DeviceEnrollmentScreen.kt)
+
+This is important because a security operator role often sounds powerful to beginners, but in this product it is intentionally not a silent tracking role.
+
 ## Authentication and Authorization
 
 The backend security helpers live in:

@@ -46,6 +46,11 @@ fun DeviceStatusScreen(
                 ) {
                     MetricRow(label = "Consent version", value = dashboard.enrollment.consentVersion ?: "-")
                     MetricRow(label = "Enrolled at", value = formatEpochMillis(dashboard.enrollment.enrolledAtEpochMs))
+                    MetricRow(label = "Ownership type", value = dashboard.enrollment.ownershipType?.name?.replace('_', ' ') ?: "-")
+                    MetricRow(label = "Authorized by", value = dashboard.enrollment.authorizationRole?.name?.replace('_', ' ') ?: "-")
+                    MetricRow(label = "Owner subject", value = dashboard.enrollment.ownerSubject ?: "Not bound on-device")
+                    MetricRow(label = "Pairing method", value = dashboard.enrollment.pairingMethod?.name?.replace('_', ' ') ?: "-")
+                    MetricRow(label = "Registration state", value = dashboard.enrollment.registrationState.name.replace('_', ' '))
                     MetricRow(label = "Lost mode until", value = formatEpochMillis(dashboard.deviceState.lostModeUntilEpochMs))
                 }
 

@@ -77,6 +77,14 @@ fun HomeDashboardScreen(
                         label = "Battery",
                         value = dashboard.deviceState.batteryPercent?.let { "$it%" } ?: "-"
                     )
+                    MetricRow(
+                        label = "Ownership",
+                        value = dashboard.enrollment.ownershipType?.name?.replace('_', ' ') ?: "-"
+                    )
+                    MetricRow(
+                        label = "Registration",
+                        value = dashboard.enrollment.registrationState.name.replace('_', ' ')
+                    )
                 }
 
                 InfoCallout(
