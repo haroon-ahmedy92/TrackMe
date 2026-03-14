@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 try:
     from jose import jwt
 except ModuleNotFoundError:  # pragma: no cover
@@ -15,6 +15,7 @@ except ModuleNotFoundError:  # pragma: no cover
     jwt = _FallbackJWT()
 
 from app.core.config import settings
+from app.services.observability_service import security_signal_store
 
 
 class Role(str, Enum):
@@ -64,16 +65,43 @@ def _decode_token(token: str) -> dict:
     )
 
 
-def get_current_principal(authorization: str | None = Header(default=None)) -> Principal:
+def get_current_principal(
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> Principal:
     if authorization is None or not authorization.startswith('Bearer '):
+        security_signal_store.record_auth_failure(
+            path=request.url.path,
+            ip_address=request.client.host if request.client else 'unknown',
+            actor_hint=None,
+            org_id=request.query_params.get('org_id'),
+            reason='missing_bearer_token',
+            request_id=getattr(request.state, 'request_id', None),
+        )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Missing bearer token')
 
     token = authorization.removeprefix('Bearer ').strip()
     try:
         claims = _decode_token(token)
     except HTTPException:
+        security_signal_store.record_auth_failure(
+            path=request.url.path,
+            ip_address=request.client.host if request.client else 'unknown',
+            actor_hint=None,
+            org_id=request.query_params.get('org_id'),
+            reason='token_verification_not_configured',
+            request_id=getattr(request.state, 'request_id', None),
+        )
         raise
     except Exception as exc:  # pragma: no cover
+        security_signal_store.record_auth_failure(
+            path=request.url.path,
+            ip_address=request.client.host if request.client else 'unknown',
+            actor_hint=None,
+            org_id=request.query_params.get('org_id'),
+            reason='invalid_token',
+            request_id=getattr(request.state, 'request_id', None),
+        )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid token') from exc
 
     roles_raw = claims.get('roles', [])
@@ -90,8 +118,16 @@ def get_current_principal(authorization: str | None = Header(default=None)) -> P
 
 
 def require_roles(*allowed: Role):
-    def _dep(principal: Principal = Depends(get_current_principal)) -> Principal:
+    def _dep(request: Request, principal: Principal = Depends(get_current_principal)) -> Principal:
         if not principal.roles.intersection(set(allowed)):
+            security_signal_store.record_auth_failure(
+                path=request.url.path,
+                ip_address=request.client.host if request.client else 'unknown',
+                actor_hint=principal.subject,
+                org_id=principal.organization_id or request.query_params.get('org_id'),
+                reason='insufficient_role',
+                request_id=getattr(request.state, 'request_id', None),
+            )
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Insufficient role')
         return principal
 

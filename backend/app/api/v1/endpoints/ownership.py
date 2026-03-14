@@ -5,7 +5,7 @@ from uuid import UUID
 
 from app.db.models import AccessReviewStatus
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_audit_log_service, get_ownership_access_service
@@ -20,6 +20,7 @@ from app.schemas.ownership import (
     DeviceIdentityVerifyRequest,
     DeviceIdentityVerifyResponse,
     EnrollmentRevokeRequest,
+    LocateDeviceRequest,
     LocateDeviceResponse,
     OwnershipBindingResponse,
     OwnershipTransferDecisionRequest,
@@ -429,8 +430,10 @@ async def revoke_enrollment(
 
 @router.post('/devices/{device_id}/locate', response_model=LocateDeviceResponse)
 async def locate_device(
+    request: Request,
     device_id: UUID,
     org_id: UUID,
+    payload: LocateDeviceRequest,
     principal: Principal = Depends(require_roles(Role.OWNER, Role.ADMIN, Role.ORG_ADMIN, Role.SUPER_ADMIN)),
     session: AsyncSession = Depends(get_db_session),
     ownership_service: OwnershipAccessService = Depends(get_ownership_access_service),
@@ -454,13 +457,37 @@ async def locate_device(
         action=action,
         entity_type='device',
         entity_id=str(device_id),
-        metadata={'reason': decision.reason, 'owner_subject': owner_subject},
+        metadata={
+            'reason': payload.reason,
+            'authorization_reason': decision.reason,
+            'owner_subject': owner_subject,
+            'result': 'denied' if not decision.allowed else 'requested',
+            'device_id': str(device_id),
+            'request_id': getattr(request.state, 'request_id', None),
+        },
     )
     if not decision.allowed:
         await session.commit()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Locate access denied')
 
     location = await ownership_service.locate_device(session, org_id=org_id, device_id=device_id)
+    await audit_log_service.append(
+        session,
+        org_id=str(org_id),
+        actor_sub=principal.subject,
+        action='LOCATION_LOOKUP_RESULT',
+        entity_type='device',
+        entity_id=str(device_id),
+        metadata={
+            'reason': payload.reason,
+            'result': 'no_location' if location is None else 'success',
+            'device_id': str(device_id),
+            'precision': location.precision.value if location else None,
+            'confidence_score': location.confidence_score if location else None,
+            'captured_at': location.captured_at.isoformat() if location else None,
+            'request_id': getattr(request.state, 'request_id', None),
+        },
+    )
     await session.commit()
     return LocateDeviceResponse(
         device_id=device_id,

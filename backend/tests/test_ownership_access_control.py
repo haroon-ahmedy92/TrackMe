@@ -173,12 +173,17 @@ def test_locate_endpoint_allows_owner_and_audits() -> None:
     app.dependency_overrides[get_ownership_access_service] = lambda: locate_service
     try:
         client = TestClient(app)
-        response = client.post(f'/api/v1/ownership/devices/{device_id}/locate', params={'org_id': org_id})
+        response = client.post(
+            f'/api/v1/ownership/devices/{device_id}/locate',
+            params={'org_id': org_id},
+            json={'reason': 'Investigating reported loss'},
+        )
         assert response.status_code == 200
         payload = response.json()
         assert payload['device_id'] == str(device_id)
         assert payload['precision'] == 'precise'
         assert 'LOCATION_LOOKUP_REQUESTED' in audit_service.actions
+        assert 'LOCATION_LOOKUP_RESULT' in audit_service.actions
     finally:
         app.dependency_overrides.clear()
 
@@ -189,7 +194,11 @@ def test_locate_endpoint_rejects_security_operator_role() -> None:
     app.dependency_overrides[get_current_principal] = _override_principal('sec-op', [Role.SECURITY_OPERATOR], org_id)
     try:
         client = TestClient(app)
-        response = client.post(f'/api/v1/ownership/devices/{device_id}/locate', params={'org_id': org_id})
+        response = client.post(
+            f'/api/v1/ownership/devices/{device_id}/locate',
+            params={'org_id': org_id},
+            json={'reason': 'Checking device'},
+        )
     finally:
         app.dependency_overrides.clear()
     assert response.status_code == 403

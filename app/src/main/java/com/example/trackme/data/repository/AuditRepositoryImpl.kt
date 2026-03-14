@@ -26,7 +26,14 @@ class AuditRepositoryImpl @Inject constructor(
     }
 
     override suspend fun appendEvent(type: String, summary: String, metadata: Map<String, String>) {
-        val metadataJson = json.encodeToString(metadata.toSortedMap())
+        val structuredMetadata = buildMap<String, String> {
+            put("schemaVersion", "1")
+            put("privacyPreserving", "true")
+            put("recordedAtEpochMs", timeProvider.nowEpochMillis().toString())
+            put("eventType", type)
+            putAll(metadata.toSortedMap())
+        }
+        val metadataJson = json.encodeToString(structuredMetadata)
         val previous = auditDao.latestOrNull()
         val createdAt = timeProvider.nowEpochMillis()
 

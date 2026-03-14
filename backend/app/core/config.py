@@ -36,6 +36,9 @@ class Settings(BaseModel):
     spatial_default_history_hours: int = 24
     spatial_max_history_hours: int = 168
     exports_storage_dir: str = 'backend/generated_exports'
+    observability_bulk_lookup_threshold: int = 10
+    observability_failed_auth_threshold: int = 5
+    observability_failed_command_threshold: int = 5
 
 
 settings = Settings()
@@ -74,3 +77,12 @@ settings.spatial_max_history_hours = int(
     os.getenv('SPATIAL_MAX_HISTORY_HOURS', settings.spatial_max_history_hours)
 )
 settings.exports_storage_dir = os.getenv('EXPORTS_STORAGE_DIR', settings.exports_storage_dir)
+settings.observability_bulk_lookup_threshold = int(
+    os.getenv('OBSERVABILITY_BULK_LOOKUP_THRESHOLD', settings.observability_bulk_lookup_threshold)
+)
+settings.observability_failed_auth_threshold = int(
+    os.getenv('OBSERVABILITY_FAILED_AUTH_THRESHOLD', settings.observability_failed_auth_threshold)
+)
+settings.observability_failed_command_threshold = int(
+    os.getenv('OBSERVABILITY_FAILED_COMMAND_THRESHOLD', settings.observability_failed_command_threshold)
+)

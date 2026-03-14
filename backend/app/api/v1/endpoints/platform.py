@@ -21,6 +21,7 @@ from app.api.deps import (
     get_ip_enrichment_service,
     get_location_ingestion_service,
     get_notification_event_service,
+    get_observability_service,
     get_remote_action_service,
     get_rules_engine_service,
     get_spatial_service,
@@ -31,7 +32,10 @@ from app.db.base import get_db_session
 from app.db.models import AuditLog, GeofenceEvent, Incident, LocationEvent
 from app.schemas.platform import (
     AuditLogResponse,
+    AuditReportEntryResponse,
+    AuditReportResponse,
     AuditLogChainVerificationResponse,
+    AccessReviewReportResponse,
     CaseEvidenceChainResponse,
     CaseEvidenceEntryResponse,
     DeviceClusterResponse,
@@ -66,6 +70,8 @@ from app.schemas.platform import (
     LocationIngestResponse,
     NotificationCreateRequest,
     NotificationResponse,
+    ObservabilityAlertResponse,
+    ObservabilityDashboardResponse,
     OrganizationCreateRequest,
     OrganizationResponse,
     RemoteActionCreateRequest,
@@ -86,6 +92,7 @@ from app.services.geofence_service import GeofenceService
 from app.services.ip_enrichment_service import IpEnrichmentService
 from app.services.location_ingestion_service import LocationIngestionService
 from app.services.notification_event_service import NotificationEventService
+from app.services.observability_service import ObservabilityService
 from app.services.remote_action_service import RemoteActionService
 from app.services.rules_engine_service import RulesEngineService
 from app.services.spatial_service import SpatialService
@@ -1159,6 +1166,90 @@ async def verify_audit_log_chain(
         broken_at_audit_id=UUID(broken_at_audit_id) if broken_at_audit_id else None,
         reason=reason,
     )
+
+
+@router.get('/observability/dashboard', response_model=ObservabilityDashboardResponse)
+async def observability_dashboard(
+    org_id: UUID = Query(...),
+    window_hours: int = Query(default=24, ge=1, le=168),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.AUDITOR)),
+    session: AsyncSession = Depends(get_db_session),
+    observability_service: ObservabilityService = Depends(get_observability_service),
+) -> ObservabilityDashboardResponse:
+    _assert_org_access(principal, org_id)
+    return ObservabilityDashboardResponse(**(await observability_service.build_dashboard(session, org_id=org_id, window_hours=window_hours)))
+
+
+@router.get('/observability/alerts', response_model=list[ObservabilityAlertResponse])
+async def observability_alerts(
+    org_id: UUID = Query(...),
+    window_hours: int = Query(default=24, ge=1, le=168),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.AUDITOR)),
+    session: AsyncSession = Depends(get_db_session),
+    observability_service: ObservabilityService = Depends(get_observability_service),
+) -> list[ObservabilityAlertResponse]:
+    _assert_org_access(principal, org_id)
+    return [ObservabilityAlertResponse(**row) for row in await observability_service.detect_alerts(session, org_id=org_id, window_hours=window_hours)]
+
+
+@router.get('/observability/access-review-report', response_model=AccessReviewReportResponse)
+async def access_review_report(
+    org_id: UUID = Query(...),
+    window_hours: int = Query(default=168, ge=1, le=720),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.AUDITOR)),
+    session: AsyncSession = Depends(get_db_session),
+    observability_service: ObservabilityService = Depends(get_observability_service),
+) -> AccessReviewReportResponse:
+    _assert_org_access(principal, org_id)
+    return AccessReviewReportResponse(**(await observability_service.build_access_review_report(session, org_id=org_id, window_hours=window_hours)))
+
+
+@router.get('/observability/audit-report', response_model=AuditReportResponse)
+async def audit_report(
+    org_id: UUID = Query(...),
+    window_hours: int = Query(default=168, ge=1, le=720),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.AUDITOR)),
+    session: AsyncSession = Depends(get_db_session),
+    observability_service: ObservabilityService = Depends(get_observability_service),
+) -> AuditReportResponse:
+    _assert_org_access(principal, org_id)
+    report = await observability_service.build_audit_report(session, org_id=org_id, window_hours=window_hours)
+    return AuditReportResponse(
+        org_id=UUID(report['org_id']),
+        window_hours=report['window_hours'],
+        generated_at=datetime.fromisoformat(report['generated_at']),
+        entries=[
+            AuditReportEntryResponse(
+                audit_id=entry['audit_id'],
+                occurred_at=datetime.fromisoformat(entry['occurred_at']),
+                actor_sub=entry['actor_sub'],
+                action=entry['action'],
+                entity_type=entry['entity_type'],
+                entity_id=entry['entity_id'],
+                reason=entry.get('reason'),
+                result=entry.get('result'),
+                request_id=entry.get('request_id'),
+                device_id=entry.get('device_id'),
+                privacy_preserving=entry.get('privacy_preserving', True),
+                metadata=entry.get('metadata', {}),
+            )
+            for entry in report['entries']
+        ],
+    )
+
+
+@router.get('/observability/audit-report/export')
+async def export_audit_report(
+    org_id: UUID = Query(...),
+    window_hours: int = Query(default=168, ge=1, le=720),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.AUDITOR)),
+    session: AsyncSession = Depends(get_db_session),
+    observability_service: ObservabilityService = Depends(get_observability_service),
+) -> FileResponse:
+    _assert_org_access(principal, org_id)
+    report = await observability_service.build_audit_report(session, org_id=org_id, window_hours=window_hours)
+    report_path = observability_service.export_audit_report(org_id=org_id, report=report)
+    return FileResponse(path=report_path, media_type='application/json', filename=report_path.name)
 
 
 def _device_response(device) -> DeviceResponse:

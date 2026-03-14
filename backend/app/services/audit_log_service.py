@@ -23,6 +23,12 @@ class AuditLogService:
         entity_id: str,
         metadata: dict,
     ) -> AuditLog:
+        metadata = {
+            'schema_version': 1,
+            'privacy_preserving': True,
+            'recorded_at': datetime.now(timezone.utc).isoformat(),
+            **metadata,
+        }
         org_uuid = uuid.UUID(org_id) if org_id else None
         latest_stmt = select(AuditLog)
         if org_uuid is None:

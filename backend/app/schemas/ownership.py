@@ -144,6 +144,10 @@ class LocateDeviceResponse(BaseModel):
     source_methods: list[str] = Field(default_factory=list)
 
 
+class LocateDeviceRequest(BaseModel):
+    reason: str = Field(min_length=4, max_length=280)
+
+
 class DeviceIdentityVerifyRequest(BaseModel):
     org_id: UUID
     device_id: UUID

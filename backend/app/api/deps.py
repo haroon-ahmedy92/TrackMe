@@ -21,6 +21,7 @@ from app.services.location_confidence import LocationConfidenceService
 from app.services.notification_event_service import NotificationEventService
 from app.services.notification_service import FcmNotificationService, NotificationService
 from app.services.notification_template_service import NotificationTemplateService
+from app.services.observability_service import ObservabilityService
 from app.services.ownership_access_service import OwnershipAccessService
 from app.services.remote_action_service import RemoteActionService
 from app.services.rules_engine_service import RulesEngineService
@@ -149,3 +150,7 @@ def get_command_queue_service() -> CommandQueueService:
         notification_event_service=get_notification_event_service(),
         notification_template_service=get_notification_template_service(),
     )
+
+
+def get_observability_service() -> ObservabilityService:
+    return ObservabilityService()

@@ -389,6 +389,82 @@ class AuditLogResponse(BaseModel):
     event_hash: str
 
 
+class ObservabilityAlertResponse(BaseModel):
+    code: str
+    severity: str
+    actor_sub: str | None = None
+    count: int
+    summary: str
+    device_count: int | None = None
+    examples: list[str] = Field(default_factory=list)
+
+
+class IngestionHealthPanel(BaseModel):
+    window_hours: int
+    location_events: int
+    last_ingested_at: datetime | None = None
+    approximate_events: int
+    telemetry_verified_events: int
+
+
+class FailedCommandsPanel(BaseModel):
+    failed_count: int
+    expired_count: int
+    top_last_errors: list[tuple[str, int]] = Field(default_factory=list)
+
+
+class BatteryImpactPanel(BaseModel):
+    samples_with_battery: int
+    average_battery_percent: float | None = None
+    low_battery_samples: int
+
+
+class ConfidenceDistributionPanel(BaseModel):
+    confidence_buckets: dict[str, int] = Field(default_factory=dict)
+    precision_distribution: dict[str, int] = Field(default_factory=dict)
+
+
+class SuspiciousActorPanel(BaseModel):
+    top_lookup_actor: dict | None = None
+    unique_lookup_actors: int
+
+
+class ObservabilityDashboardResponse(BaseModel):
+    ingestion_health: IngestionHealthPanel
+    failed_commands: FailedCommandsPanel
+    battery_impact: BatteryImpactPanel
+    location_confidence_distribution: ConfidenceDistributionPanel
+    suspicious_actor_behavior: SuspiciousActorPanel
+
+
+class AccessReviewReportResponse(BaseModel):
+    window_hours: int
+    totals: dict[str, int] = Field(default_factory=dict)
+    reviews: list[dict] = Field(default_factory=list)
+
+
+class AuditReportEntryResponse(BaseModel):
+    audit_id: str
+    occurred_at: datetime
+    actor_sub: str
+    action: str
+    entity_type: str
+    entity_id: str
+    reason: str | None = None
+    result: str | None = None
+    request_id: str | None = None
+    device_id: str | None = None
+    privacy_preserving: bool = True
+    metadata: dict = Field(default_factory=dict)
+
+
+class AuditReportResponse(BaseModel):
+    org_id: UUID
+    window_hours: int
+    generated_at: datetime
+    entries: list[AuditReportEntryResponse] = Field(default_factory=list)
+
+
 class AuditLogChainVerificationResponse(BaseModel):
     org_id: UUID
     verified: bool

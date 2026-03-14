@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from app.api.v1.router import router as v1_router
 from app.core.config import settings
+from app.core.observability import StructuredRequestLogMiddleware
 from app.core.rate_limit import InMemoryRateLimitMiddleware
 
 app = FastAPI(
@@ -16,4 +17,5 @@ app.add_middleware(
     requests=settings.rate_limit_requests,
     window_seconds=settings.rate_limit_window_seconds,
 )
+app.add_middleware(StructuredRequestLogMiddleware)
 app.include_router(v1_router, prefix=settings.api_prefix)
