@@ -40,6 +40,7 @@ The easiest learning path is:
 5. [`docs/security.md`](./docs/security.md)
 6. [`docs/testing.md`](./docs/testing.md)
 7. [`docs/ownership-enrollment-rbac.md`](./docs/ownership-enrollment-rbac.md)
+8. [`docs/compliance-ux.md`](./docs/compliance-ux.md)
 
 The larger test execution plan also lives in [`TEST_STRATEGY.md`](./TEST_STRATEGY.md).
 

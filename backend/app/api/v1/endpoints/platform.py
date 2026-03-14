@@ -13,6 +13,7 @@ from app.api.deps import (
     get_auth_identity_service,
     get_case_evidence_service,
     get_case_management_service,
+    get_compliance_service,
     get_device_key_service,
     get_device_registry_service,
     get_enrollment_service,
@@ -30,6 +31,14 @@ from app.api.deps import (
 from app.core.security import Principal, Role, require_roles
 from app.db.base import get_db_session
 from app.db.models import AuditLog, GeofenceEvent, Incident, LocationEvent
+from app.schemas.compliance import (
+    AbuseReportCreateRequest,
+    AbuseReportResponse,
+    PlatformSettingsResponse,
+    PrivacyDefaultsResponse,
+    RetentionPolicyResponse,
+    RetentionPolicyUpdateRequest,
+)
 from app.schemas.platform import (
     AuditLogResponse,
     AuditReportEntryResponse,
@@ -87,6 +96,7 @@ from app.services.audit_log_service import AuditLogService
 from app.services.auth_identity_service import AuthIdentityService
 from app.services.case_evidence_service import CaseEvidenceService
 from app.services.case_management_service import CaseManagementService
+from app.services.compliance_service import ComplianceService
 from app.services.device_key_service import DeviceKeyService
 from app.services.device_registry_service import DeviceRegistryService
 from app.services.enrollment_service import EnrollmentService
@@ -1324,6 +1334,111 @@ async def export_audit_report(
     report = await observability_service.build_audit_report(session, org_id=org_id, window_hours=window_hours)
     report_path = observability_service.export_audit_report(org_id=org_id, report=report)
     return FileResponse(path=report_path, media_type='application/json', filename=report_path.name)
+
+
+@router.get('/settings', response_model=PlatformSettingsResponse)
+async def get_platform_settings(
+    org_id: UUID = Query(...),
+    principal: Principal = Depends(require_roles(Role.OWNER, Role.ADMIN, Role.ORG_ADMIN, Role.SUPER_ADMIN, Role.SECURITY, Role.SECURITY_OPERATOR)),
+    session: AsyncSession = Depends(get_db_session),
+    compliance_service: ComplianceService = Depends(get_compliance_service),
+) -> PlatformSettingsResponse:
+    _assert_org_access(principal, org_id)
+    settings_record = await compliance_service.get_or_create_settings(session, org_id=org_id)
+    await session.commit()
+    return PlatformSettingsResponse(
+        org_id=org_id,
+        timezone='Africa/Dar_es_Salaam',
+        default_map_provider='google',
+        retention_policy=RetentionPolicyResponse(
+            location_event_days=settings_record.location_event_days,
+            audit_log_days=settings_record.audit_log_days,
+            incident_evidence_days=settings_record.incident_evidence_days,
+        ),
+        privacy_defaults=PrivacyDefaultsResponse(),
+        updated_at=settings_record.updated_at,
+        updated_by_sub=settings_record.updated_by_sub,
+    )
+
+
+@router.put('/settings/retention-policy', response_model=RetentionPolicyResponse)
+async def update_retention_policy(
+    payload: RetentionPolicyUpdateRequest,
+    principal: Principal = Depends(require_roles(Role.ADMIN, Role.ORG_ADMIN, Role.SUPER_ADMIN)),
+    session: AsyncSession = Depends(get_db_session),
+    compliance_service: ComplianceService = Depends(get_compliance_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> RetentionPolicyResponse:
+    _assert_org_access(principal, payload.org_id)
+    settings_record = await compliance_service.update_retention_policy(
+        session,
+        payload=payload,
+        actor_sub=principal.subject,
+    )
+    await audit_log_service.append(
+        session,
+        org_id=str(payload.org_id),
+        actor_sub=principal.subject,
+        action='RETENTION_POLICY_UPDATED',
+        entity_type='tenant_settings',
+        entity_id=str(settings_record.id),
+        metadata={
+            'reason': payload.reason,
+            'location_event_days': payload.location_event_days,
+            'audit_log_days': payload.audit_log_days,
+            'incident_evidence_days': payload.incident_evidence_days,
+        },
+    )
+    await session.commit()
+    return RetentionPolicyResponse(
+        location_event_days=settings_record.location_event_days,
+        audit_log_days=settings_record.audit_log_days,
+        incident_evidence_days=settings_record.incident_evidence_days,
+    )
+
+
+@router.post('/abuse-reports', response_model=AbuseReportResponse, status_code=status.HTTP_201_CREATED)
+async def create_abuse_report(
+    payload: AbuseReportCreateRequest,
+    principal: Principal = Depends(require_roles(Role.OWNER, Role.ADMIN, Role.ORG_ADMIN, Role.SUPER_ADMIN, Role.SECURITY, Role.SECURITY_OPERATOR)),
+    session: AsyncSession = Depends(get_db_session),
+    compliance_service: ComplianceService = Depends(get_compliance_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> AbuseReportResponse:
+    _assert_org_access(principal, payload.org_id)
+    try:
+        report = await compliance_service.create_abuse_report(
+            session,
+            payload=payload,
+            reported_by_sub=principal.subject,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await audit_log_service.append(
+        session,
+        org_id=str(payload.org_id),
+        actor_sub=principal.subject,
+        action='ABUSE_REPORT_SUBMITTED',
+        entity_type='abuse_report',
+        entity_id=str(report.id),
+        metadata={
+            'device_id': str(payload.device_id) if payload.device_id else None,
+            'category': payload.category,
+            'contact_email': payload.contact_email,
+        },
+    )
+    await session.commit()
+    return AbuseReportResponse(
+        abuse_report_id=report.id,
+        org_id=report.org_id,
+        device_id=report.device_id,
+        category=report.category,
+        description=report.description,
+        contact_email=report.contact_email,
+        reported_by_sub=report.reported_by_sub,
+        status=report.status,
+        created_at=report.created_at,
+    )
 
 
 def _device_response(device) -> DeviceResponse:

@@ -2,6 +2,7 @@ import { httpClient } from '@/lib/api/httpClient';
 import type { ApiClient } from '@/lib/api/types';
 import { authStorage } from '@/lib/auth/storage';
 import type {
+  AccessHistoryRecord,
   AuditLogRecord,
   CaseActionRecord,
   CaseAttachmentRecord,
@@ -20,6 +21,7 @@ import type {
   LoginResponse,
   LocationHistoryPoint,
   LocationSnapshot,
+  OwnershipBindingRecord,
   PlatformSettings,
   RemoteActionRecord,
 } from '@/types/models';
@@ -252,6 +254,90 @@ const toCaseAction = (payload: {
   lastError: payload.last_error ?? undefined,
 });
 
+const toOwnershipBinding = (payload: {
+  ownership_binding_id: string;
+  org_id: string;
+  device_id: string;
+  owner_subject?: string | null;
+  ownership_type: 'single_user' | 'organization_owned';
+  proof_kind: string;
+  consent_version: string;
+  consent_captured_at: string;
+  is_active: boolean;
+  created_at: string;
+  ended_at?: string | null;
+}): OwnershipBindingRecord => ({
+  id: payload.ownership_binding_id,
+  orgId: payload.org_id,
+  deviceId: payload.device_id,
+  ownerSubject: payload.owner_subject ?? undefined,
+  ownershipType: payload.ownership_type,
+  proofKind: payload.proof_kind,
+  consentVersion: payload.consent_version,
+  consentCapturedAt: payload.consent_captured_at,
+  isActive: payload.is_active,
+  createdAt: payload.created_at,
+  endedAt: payload.ended_at ?? undefined,
+});
+
+const toAccessHistory = (payload: {
+  audit_log_id: string;
+  actor_sub: string;
+  action: string;
+  occurred_at: string;
+  reason?: string | null;
+  result?: string | null;
+  metadata?: Record<string, string | number | boolean | null>;
+}): AccessHistoryRecord => ({
+  id: payload.audit_log_id,
+  actor: payload.actor_sub,
+  action: payload.action,
+  occurredAt: payload.occurred_at,
+  reason: payload.reason ?? undefined,
+  result: payload.result ?? undefined,
+  metadata: payload.metadata ?? {},
+});
+
+const toPlatformSettings = (payload: {
+  org_id: string;
+  timezone: string;
+  default_map_provider: 'google' | 'mapbox';
+  retention_policy: {
+    location_event_days: number;
+    audit_log_days: number;
+    incident_evidence_days: number;
+  };
+  privacy_defaults: {
+    explicit_consent_required: boolean;
+    visible_app_required: boolean;
+    background_location_requires_explanation: boolean;
+    owner_access_history_visible: boolean;
+    approximate_locations_clearly_labeled: boolean;
+    short_retention_default: boolean;
+  };
+  updated_at?: string | null;
+  updated_by_sub?: string | null;
+}): PlatformSettings => ({
+  orgId: payload.org_id,
+  timezone: payload.timezone,
+  defaultMapProvider: payload.default_map_provider,
+  retentionPolicy: {
+    locationEventDays: payload.retention_policy.location_event_days,
+    auditLogDays: payload.retention_policy.audit_log_days,
+    incidentEvidenceDays: payload.retention_policy.incident_evidence_days,
+  },
+  privacyDefaults: {
+    explicitConsentRequired: payload.privacy_defaults.explicit_consent_required,
+    visibleAppRequired: payload.privacy_defaults.visible_app_required,
+    backgroundLocationRequiresExplanation: payload.privacy_defaults.background_location_requires_explanation,
+    ownerAccessHistoryVisible: payload.privacy_defaults.owner_access_history_visible,
+    approximateLocationsClearlyLabeled: payload.privacy_defaults.approximate_locations_clearly_labeled,
+    shortRetentionDefault: payload.privacy_defaults.short_retention_default,
+  },
+  updatedAt: payload.updated_at ?? undefined,
+  updatedBySub: payload.updated_by_sub ?? undefined,
+});
+
 export const restApiClient: ApiClient = {
   login: (payload: LoginRequest) => httpClient.post<LoginResponse>('/auth/login', payload),
 
@@ -264,6 +350,23 @@ export const restApiClient: ApiClient = {
       throw new Error('Device not found');
     }
     return device;
+  },
+
+  getDeviceBinding: async (deviceId: string) => {
+    const payload = await httpClient.get<{
+      ownership_binding_id: string;
+      org_id: string;
+      device_id: string;
+      owner_subject?: string | null;
+      ownership_type: 'single_user' | 'organization_owned';
+      proof_kind: string;
+      consent_version: string;
+      consent_captured_at: string;
+      is_active: boolean;
+      created_at: string;
+      ended_at?: string | null;
+    }>(`/ownership/devices/${deviceId}/binding?org_id=${encodeURIComponent(orgId())}`);
+    return payload ? toOwnershipBinding(payload) : null;
   },
 
   getLastKnownLocation: async (deviceId: string) => {
@@ -281,6 +384,52 @@ export const restApiClient: ApiClient = {
       is_ip_approximate?: boolean;
     } | null>(`/platform/devices/${deviceId}/last-location?org_id=${encodeURIComponent(orgId())}`);
     return payload ? toLocationSnapshot(camelLocation(payload)) : null;
+  },
+
+  locateDevice: async (deviceId: string, reason: string) => {
+    const payload = await httpClient.post<{
+      device_id: string;
+      org_id: string;
+      requested_at: string;
+      precision: 'precise' | 'moderate' | 'approximate' | null;
+      confidence_score: number | null;
+      is_approximate: boolean;
+      latitude: number | null;
+      longitude: number | null;
+      accuracy_meters: number | null;
+      captured_at: string | null;
+      source_methods: string[];
+    }>(`/ownership/devices/${deviceId}/locate?org_id=${encodeURIComponent(orgId())}`, { reason });
+    if (!payload.captured_at) {
+      return null;
+    }
+    return {
+      latitude: payload.latitude,
+      longitude: payload.longitude,
+      accuracyMeters: payload.accuracy_meters,
+      precision: payload.precision ?? 'approximate',
+      confidenceScore: payload.confidence_score ?? 0,
+      collectedAt: payload.captured_at,
+      sourceLabel: payload.is_approximate ? 'Approximate location result' : 'Authorized locate result',
+      sourceMethods: payload.source_methods,
+      isApproximate: payload.is_approximate,
+      notes: payload.is_approximate ? 'Approximate location only. Do not treat this as exact recovery position.' : undefined,
+    };
+  },
+
+  getDeviceAccessHistory: async (deviceId: string) => {
+    const payload = await httpClient.get<
+      Array<{
+        audit_log_id: string;
+        actor_sub: string;
+        action: string;
+        occurred_at: string;
+        reason?: string | null;
+        result?: string | null;
+        metadata?: Record<string, string | number | boolean | null>;
+      }>
+    >(`/ownership/devices/${deviceId}/access-history?org_id=${encodeURIComponent(orgId())}`);
+    return payload.map(toAccessHistory);
   },
 
   getLocationHistory: async (deviceId: string, windowHours = 24) => {
@@ -619,11 +768,62 @@ export const restApiClient: ApiClient = {
   rejectRemoteAction: (actionId: string, reason: string) =>
     httpClient.post<void>(`/platform/remote-actions/${actionId}/reject`, { reason }),
 
-  getSettings: () => httpClient.get<PlatformSettings>('/platform/settings'),
+  getSettings: async () => {
+    const payload = await httpClient.get<{
+      org_id: string;
+      timezone: string;
+      default_map_provider: 'google' | 'mapbox';
+      retention_policy: {
+        location_event_days: number;
+        audit_log_days: number;
+        incident_evidence_days: number;
+      };
+      privacy_defaults: {
+        explicit_consent_required: boolean;
+        visible_app_required: boolean;
+        background_location_requires_explanation: boolean;
+        owner_access_history_visible: boolean;
+        approximate_locations_clearly_labeled: boolean;
+        short_retention_default: boolean;
+      };
+      updated_at?: string | null;
+      updated_by_sub?: string | null;
+    }>(`/platform/settings?org_id=${encodeURIComponent(orgId())}`);
+    return toPlatformSettings(payload);
+  },
 
-  updateRetentionPolicy: (policy, reason) =>
-    httpClient.put<PlatformSettings['retentionPolicy']>('/platform/settings/retention-policy', {
-      ...policy,
+  updateRetentionPolicy: async (policy, reason) => {
+    const payload = await httpClient.put<{
+      location_event_days: number;
+      audit_log_days: number;
+      incident_evidence_days: number;
+    }>('/platform/settings/retention-policy', {
+      org_id: orgId(),
+      location_event_days: policy.locationEventDays,
+      audit_log_days: policy.auditLogDays,
+      incident_evidence_days: policy.incidentEvidenceDays,
       reason,
-    }),
+    });
+    return {
+      locationEventDays: payload.location_event_days,
+      auditLogDays: payload.audit_log_days,
+      incidentEvidenceDays: payload.incident_evidence_days,
+    };
+  },
+
+  submitAbuseReport: async (payload) => {
+    await httpClient.post<void>('/platform/abuse-reports', {
+      org_id: orgId(),
+      device_id: payload.deviceId,
+      category: payload.category,
+      description: payload.description,
+      contact_email: payload.contactEmail,
+    });
+  },
+
+  deprovisionDevice: async (deviceId, reason) => {
+    await httpClient.post<void>(`/ownership/devices/${deviceId}/deprovision?org_id=${encodeURIComponent(orgId())}`, {
+      reason,
+    });
+  },
 };

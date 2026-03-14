@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { Textarea } from '@/components/ui/Textarea';
 import { apiClient } from '@/lib/api/client';
 import { useAsyncData } from '@/lib/hooks/useAsyncData';
 import { useEffect, useState } from 'react';
@@ -14,12 +15,15 @@ import { useEffect, useState } from 'react';
 export default function SettingsPage() {
   const settingsState = useAsyncData(() => apiClient.getSettings(), []);
 
-  const [locationDays, setLocationDays] = useState('90');
-  const [auditDays, setAuditDays] = useState('365');
-  const [incidentDays, setIncidentDays] = useState('180');
+  const [locationDays, setLocationDays] = useState('30');
+  const [auditDays, setAuditDays] = useState('90');
+  const [incidentDays, setIncidentDays] = useState('60');
   const [mapProvider, setMapProvider] = useState<'google' | 'mapbox'>('google');
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [abuseCategory, setAbuseCategory] = useState('unauthorized_lookup');
+  const [abuseDescription, setAbuseDescription] = useState('');
   const [saving, setSaving] = useState(false);
+  const [submittingAbuse, setSubmittingAbuse] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -55,6 +59,24 @@ export default function SettingsPage() {
       setError(errorValue instanceof Error ? errorValue.message : 'Unable to update settings.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const onSubmitAbuseReport = async () => {
+    setSubmittingAbuse(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await apiClient.submitAbuseReport({
+        category: abuseCategory,
+        description: abuseDescription,
+      });
+      setAbuseDescription('');
+      setSuccess('Abuse report submitted and linked to the audit trail.');
+    } catch (errorValue) {
+      setError(errorValue instanceof Error ? errorValue.message : 'Unable to submit abuse report.');
+    } finally {
+      setSubmittingAbuse(false);
     }
   };
 
@@ -148,6 +170,64 @@ export default function SettingsPage() {
               <Badge variant="warning">Sensitive Action</Badge>
               <Button onClick={() => setConfirmOpen(true)}>Save Retention Policy</Button>
             </div>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid-2">
+        <Card>
+          <h2 style={{ marginTop: 0 }}>Privacy Dashboard</h2>
+          <div className="stack">
+            <div className="row">
+              <Badge variant="success">{settingsState.data.privacyDefaults.visibleAppRequired ? 'Visible app required' : 'Review needed'}</Badge>
+              <Badge variant="success">
+                {settingsState.data.privacyDefaults.explicitConsentRequired ? 'Explicit consent required' : 'Review needed'}
+              </Badge>
+            </div>
+            <div className="row">
+              <Badge variant="success">
+                {settingsState.data.privacyDefaults.backgroundLocationRequiresExplanation
+                  ? 'Background location explained'
+                  : 'Review needed'}
+              </Badge>
+              <Badge variant="warning">
+                {settingsState.data.privacyDefaults.shortRetentionDefault ? 'Short retention default' : 'Long retention profile'}
+              </Badge>
+            </div>
+            <p className="text-muted" style={{ margin: 0, fontSize: 13 }}>
+              Approximate results are always labeled, owner/admin access history remains visible, and hidden or deceptive behavior is out of scope.
+            </p>
+            <p className="text-muted" style={{ margin: 0, fontSize: 12 }}>
+              Last settings update: {settingsState.data.updatedAt ?? 'Unknown'} by {settingsState.data.updatedBySub ?? 'system default'}
+            </p>
+          </div>
+        </Card>
+
+        <Card>
+          <h2 style={{ marginTop: 0 }}>Abuse Reporting</h2>
+          <div className="stack">
+            <Select
+              label="Category"
+              value={abuseCategory}
+              onChange={(event) => setAbuseCategory(event.target.value)}
+              options={[
+                { label: 'Unauthorized locate lookups', value: 'unauthorized_lookup' },
+                { label: 'Policy confusion', value: 'policy_confusion' },
+                { label: 'Unexpected access', value: 'unexpected_access' },
+              ]}
+            />
+            <Textarea
+              label="Report description"
+              value={abuseDescription}
+              onChange={(event) => setAbuseDescription(event.target.value)}
+              placeholder="Describe the behavior, who was affected, and why it appears inconsistent with policy."
+            />
+            <p className="text-muted" style={{ margin: 0, fontSize: 12 }}>
+              Reports are audit-linked and should describe visible product misuse, not covert monitoring features.
+            </p>
+            <Button disabled={submittingAbuse || abuseDescription.trim().length < 8} onClick={() => void onSubmitAbuseReport()}>
+              Submit Abuse Report
+            </Button>
           </div>
         </Card>
       </div>

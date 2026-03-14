@@ -2,6 +2,7 @@ package com.example.trackme.feature.onboarding
 
 import androidx.lifecycle.ViewModel
 import com.example.trackme.core.ui.AsyncUiState
+import com.example.trackme.domain.usecase.GetEnrollmentDisclosureUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -10,9 +11,17 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 @HiltViewModel
-class OnboardingViewModel @Inject constructor() : ViewModel() {
+class OnboardingViewModel @Inject constructor(
+    disclosureUseCase: GetEnrollmentDisclosureUseCase
+) : ViewModel() {
 
-    private val _uiState = MutableStateFlow<OnboardingUiState>(AsyncUiState.Data(OnboardingContent()))
+    private val _uiState = MutableStateFlow<OnboardingUiState>(
+        AsyncUiState.Data(
+            OnboardingContent(
+                disclosure = disclosureUseCase()
+            )
+        )
+    )
     val uiState: StateFlow<OnboardingUiState> = _uiState.asStateFlow()
 
     fun setConsentAccepted(accepted: Boolean) {

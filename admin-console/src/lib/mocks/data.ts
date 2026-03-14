@@ -221,13 +221,24 @@ export const mockRemoteActions: RemoteActionRecord[] = [
 ];
 
 export const mockSettings: PlatformSettings = {
+  orgId: 'org-001',
   timezone: 'Africa/Dar_es_Salaam',
   defaultMapProvider: 'google',
   retentionPolicy: {
-    locationEventDays: 90,
-    auditLogDays: 365,
-    incidentEvidenceDays: 180,
+    locationEventDays: 30,
+    auditLogDays: 90,
+    incidentEvidenceDays: 60,
   },
+  privacyDefaults: {
+    explicitConsentRequired: true,
+    visibleAppRequired: true,
+    backgroundLocationRequiresExplanation: true,
+    ownerAccessHistoryVisible: true,
+    approximateLocationsClearlyLabeled: true,
+    shortRetentionDefault: true,
+  },
+  updatedAt: '2026-03-14T10:00:00Z',
+  updatedBySub: 'admin@trackme.example',
 };
 
 export const mockLocationHistory: Record<string, LocationHistoryPoint[]> = {

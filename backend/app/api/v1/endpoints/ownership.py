@@ -8,7 +8,7 @@ from app.db.models import AccessReviewStatus
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_audit_log_service, get_ownership_access_service
+from app.api.deps import get_audit_log_service, get_compliance_service, get_ownership_access_service
 from app.core.security import Principal, Role, require_roles
 from app.db.base import get_db_session
 from app.schemas.ownership import (
@@ -30,7 +30,9 @@ from app.schemas.ownership import (
     PairingTokenIssueRequest,
     PairingTokenIssueResponse,
 )
+from app.schemas.compliance import AccessHistoryEntryResponse, DeprovisionDeviceRequest, DeprovisionDeviceResponse
 from app.services.audit_log_service import AuditLogService
+from app.services.compliance_service import ComplianceService
 from app.services.ownership_access_service import OwnershipAccessService
 
 router = APIRouter(prefix='/ownership', tags=['ownership'])
@@ -501,6 +503,86 @@ async def locate_device(
         accuracy_meters=float(location.accuracy_meters) if location and location.accuracy_meters is not None else None,
         captured_at=location.captured_at if location else None,
         source_methods=list(location.source_methods.get('methods', [])) if location else [],
+    )
+
+
+@router.get('/devices/{device_id}/access-history', response_model=list[AccessHistoryEntryResponse])
+async def get_device_access_history(
+    device_id: UUID,
+    org_id: UUID,
+    principal: Principal = Depends(require_roles(Role.OWNER, Role.ADMIN, Role.ORG_ADMIN, Role.SUPER_ADMIN, Role.SECURITY, Role.SECURITY_OPERATOR)),
+    session: AsyncSession = Depends(get_db_session),
+    ownership_service: OwnershipAccessService = Depends(get_ownership_access_service),
+    compliance_service: ComplianceService = Depends(get_compliance_service),
+) -> list[AccessHistoryEntryResponse]:
+    _assert_org_access(principal, org_id)
+    binding = await ownership_service.get_active_binding(session, device_id)
+    owner_subject = await ownership_service.get_owner_subject(session, binding)
+    _assert_binding_visibility(principal, owner_subject)
+    entries = await compliance_service.list_access_history(session, org_id=org_id, device_id=device_id)
+    return [
+        AccessHistoryEntryResponse(
+            audit_log_id=entry.id,
+            actor_sub=entry.actor_sub,
+            action=entry.action,
+            occurred_at=entry.occurred_at,
+            reason=entry.metadata_json.get('reason'),
+            result=entry.metadata_json.get('result'),
+            metadata=entry.metadata_json,
+        )
+        for entry in entries
+    ]
+
+
+@router.post('/devices/{device_id}/deprovision', response_model=DeprovisionDeviceResponse)
+async def deprovision_device(
+    device_id: UUID,
+    org_id: UUID,
+    payload: DeprovisionDeviceRequest,
+    principal: Principal = Depends(require_roles(Role.OWNER, Role.ADMIN, Role.ORG_ADMIN, Role.SUPER_ADMIN)),
+    session: AsyncSession = Depends(get_db_session),
+    ownership_service: OwnershipAccessService = Depends(get_ownership_access_service),
+    compliance_service: ComplianceService = Depends(get_compliance_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> DeprovisionDeviceResponse:
+    _assert_org_access(principal, org_id)
+    binding = await ownership_service.get_active_binding(session, device_id)
+    owner_subject = await ownership_service.get_owner_subject(session, binding)
+    if Role.OWNER in principal.roles and owner_subject != principal.subject:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Owner can only deprovision a device they own')
+    try:
+        result = await compliance_service.deprovision_device(
+            session,
+            org_id=org_id,
+            device_id=device_id,
+            requested_by_sub=principal.subject,
+            reason=payload.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await audit_log_service.append(
+        session,
+        org_id=str(org_id),
+        actor_sub=principal.subject,
+        action='DEVICE_DEPROVISIONED',
+        entity_type='device',
+        entity_id=str(device_id),
+        metadata={
+            'reason': payload.reason,
+            'status': result.status.value,
+            'owner_subject': owner_subject,
+        },
+    )
+    await session.commit()
+    return DeprovisionDeviceResponse(
+        deprovision_request_id=result.id,
+        org_id=result.org_id,
+        device_id=result.device_id,
+        requested_by_sub=result.requested_by_sub,
+        status=result.status.value,
+        reason=result.reason,
+        created_at=result.created_at,
+        completed_at=result.completed_at,
     )
 
 

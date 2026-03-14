@@ -67,6 +67,20 @@ fun LostModeScreen(
                 }
 
                 SectionCard(
+                    title = "Before you enable lost mode",
+                    eyebrow = "Just-in-time notice"
+                ) {
+                    Text(
+                        text = "Lost mode increases reporting frequency for a limited recovery window. It remains visible in the app, uses only the permissions already granted, and records the change in audit history.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    MetricRow(label = "User notice", value = "Visible in-app state")
+                    MetricRow(label = "Approximate signals", value = "Still labeled approximate")
+                    MetricRow(label = "Timeout", value = "Automatically ends unless renewed")
+                }
+
+                SectionCard(
                     title = "Actions",
                     eyebrow = "Time-boxed controls"
                 ) {

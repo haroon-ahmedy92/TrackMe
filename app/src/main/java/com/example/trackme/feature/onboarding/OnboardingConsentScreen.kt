@@ -9,6 +9,7 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Button
@@ -33,6 +34,7 @@ import com.example.trackme.core.permissions.PermissionUtils
 import com.example.trackme.core.ui.AsyncUiState
 import com.example.trackme.feature.common.EmptyStateCard
 import com.example.trackme.feature.common.InfoCallout
+import com.example.trackme.feature.common.MetricRow
 import com.example.trackme.feature.common.SectionCard
 import com.example.trackme.feature.common.StatusChip
 import com.example.trackme.feature.common.TrackMeScreen
@@ -101,7 +103,48 @@ fun OnboardingConsentScreen(
                 title = stringResource(id = R.string.onboarding_title),
                 subtitle = stringResource(id = R.string.onboarding_description)
             ) {
-                InfoCallout(text = stringResource(id = R.string.permission_education_body))
+                InfoCallout(
+                    text = "TrackMe is a visible device recovery app. It explains why permissions are needed, records consent, and does not hide itself or enable covert tracking."
+                )
+
+                SectionCard(
+                    title = content.disclosure?.title ?: "Recovery disclosure",
+                    eyebrow = content.disclosure?.version ?: "Disclosure"
+                ) {
+                    content.disclosure?.bulletPoints?.forEach { bullet ->
+                        Text(
+                            text = "• $bullet",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                SectionCard(
+                    title = "Why background location may be requested",
+                    eyebrow = "Core feature explanation"
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "Background location supports lawful recovery check-ins, lost-mode updates, geofence alerts, and last-known-location evidence when the app is not open.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        MetricRow(
+                            label = "If granted",
+                            value = "Recovery can continue within Android limits",
+                        )
+                        MetricRow(
+                            label = "If skipped",
+                            value = "The app only works while open or during foreground use",
+                        )
+                        MetricRow(
+                            label = "Important",
+                            value = "Approximate results stay labeled approximate",
+                            emphasize = true
+                        )
+                    }
+                }
 
                 SectionCard(
                     title = "Consent confirmation",
@@ -163,7 +206,14 @@ fun OnboardingConsentScreen(
                     )
 
                     if (needsBackground && content.foregroundLocationGranted) {
-                        Text(text = stringResource(id = R.string.background_permission_explain))
+                        InfoCallout(
+                            text = "Android treats background location as a high-sensitivity permission. We ask only because recovery is a core feature, and you can continue after reviewing the explanation even if you postpone it."
+                        )
+
+                        Text(
+                            text = stringResource(id = R.string.background_permission_explain),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
 
                         StatusChip(
                             label = if (content.backgroundLocationGranted) "Background granted" else "Background optional",
@@ -211,6 +261,27 @@ fun OnboardingConsentScreen(
                             }
                         )
                     }
+                }
+
+                SectionCard(
+                    title = "What happens next",
+                    eyebrow = "Visible enrollment"
+                ) {
+                    MetricRow(label = "Consent record", value = content.disclosure?.version ?: "Pending")
+                    MetricRow(
+                        label = "Background permission",
+                        value = when {
+                            !needsBackground -> "Not required by this Android version"
+                            content.backgroundLocationGranted -> "Granted"
+                            content.backgroundDecisionMade -> "Deferred by user"
+                            else -> "Pending decision"
+                        }
+                    )
+                    Text(
+                        text = "Continuing takes you to visible enrollment. Device ownership, pairing, and future locate access are all enforced through auditable backend policy checks.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
 
                 Button(

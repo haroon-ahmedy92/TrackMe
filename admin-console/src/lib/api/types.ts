@@ -1,4 +1,5 @@
 import type {
+  AccessHistoryRecord,
   AuditLogRecord,
   CaseAttachmentRecord,
   CaseEvidenceChainRecord,
@@ -15,6 +16,7 @@ import type {
   LoginResponse,
   LocationHistoryPoint,
   LocationSnapshot,
+  OwnershipBindingRecord,
   PlatformSettings,
   RemoteActionRecord,
 } from '@/types/models';
@@ -23,7 +25,10 @@ export interface ApiClient {
   login(payload: LoginRequest): Promise<LoginResponse>;
   getDevices(): Promise<DeviceRecord[]>;
   getDeviceById(deviceId: string): Promise<DeviceRecord>;
+  getDeviceBinding(deviceId: string): Promise<OwnershipBindingRecord | null>;
   getLastKnownLocation(deviceId: string): Promise<LocationSnapshot | null>;
+  locateDevice(deviceId: string, reason: string): Promise<LocationSnapshot | null>;
+  getDeviceAccessHistory(deviceId: string): Promise<AccessHistoryRecord[]>;
   getLocationHistory(deviceId: string, windowHours?: number): Promise<LocationHistoryPoint[]>;
   getDeviceClusters(windowHours?: number, cellSizeMeters?: number): Promise<DeviceClusterRecord[]>;
   getIncidents(): Promise<IncidentRecord[]>;
@@ -56,4 +61,6 @@ export interface ApiClient {
     policy: PlatformSettings['retentionPolicy'],
     reason: string,
   ): Promise<PlatformSettings['retentionPolicy']>;
+  submitAbuseReport(payload: { category: string; description: string; contactEmail?: string; deviceId?: string }): Promise<void>;
+  deprovisionDevice(deviceId: string, reason: string): Promise<void>;
 }

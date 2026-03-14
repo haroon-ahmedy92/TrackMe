@@ -18,6 +18,7 @@ import {
   mockSettings,
 } from '@/lib/mocks/data';
 import type {
+  AccessHistoryRecord,
   CaseAttachmentRecord,
   CaseEvidenceChainRecord,
   CaseNoteRecord,
@@ -31,6 +32,7 @@ import type {
   LoginResponse,
   LocationHistoryPoint,
   LocationSnapshot,
+  OwnershipBindingRecord,
   RemoteActionRecord,
 } from '@/types/models';
 
@@ -115,10 +117,70 @@ export const mockApiClient: ApiClient = {
     return clone(device);
   },
 
+  async getDeviceBinding(deviceId: string): Promise<OwnershipBindingRecord | null> {
+    await wait();
+    const device = devices.find((item) => item.id === deviceId);
+    if (!device) {
+      throw new ApiError('Device not found', 404);
+    }
+    return {
+      id: `binding-${deviceId}`,
+      orgId: device.tenantId,
+      deviceId,
+      ownerSubject: 'owner@local',
+      ownershipType: 'organization_owned',
+      proofKind: 'enrollment_token',
+      consentVersion: '2026-03-10',
+      consentCapturedAt: device.enrollmentDate,
+      isActive: true,
+      createdAt: device.enrollmentDate,
+    };
+  },
+
   async getLastKnownLocation(deviceId: string): Promise<LocationSnapshot | null> {
     await wait();
     const history = locationHistory[deviceId] ?? [];
     return clone(history[history.length - 1] ?? devices.find((item) => item.id === deviceId)?.location ?? null);
+  },
+
+  async locateDevice(deviceId: string, reason: string): Promise<LocationSnapshot | null> {
+    await wait();
+    appendAudit({ action: 'LOCATION_LOOKUP_REQUESTED', targetType: 'device', targetId: deviceId, reason });
+    const location = await this.getLastKnownLocation(deviceId);
+    appendAudit({
+      action: 'LOCATION_LOOKUP_RESULT',
+      targetType: 'device',
+      targetId: deviceId,
+      reason: location ? 'Locate request returned last known location' : 'Locate request returned no location',
+    });
+    return location;
+  },
+
+  async getDeviceAccessHistory(deviceId: string): Promise<AccessHistoryRecord[]> {
+    await wait();
+    return clone(
+      auditLogs
+        .filter(
+          (entry) =>
+            entry.targetType === 'device' &&
+            entry.targetId === deviceId &&
+            ['LOCATION_LOOKUP_REQUESTED', 'LOCATION_LOOKUP_RESULT', 'DEVICE_DEPROVISIONED'].includes(entry.action),
+        )
+        .map((entry) => ({
+          id: entry.id,
+          actor: entry.actor,
+          action: entry.action,
+          occurredAt: entry.createdAt,
+          reason: entry.reason,
+          result:
+            entry.action === 'LOCATION_LOOKUP_REQUESTED'
+              ? 'requested'
+              : entry.action === 'LOCATION_LOOKUP_RESULT'
+                ? 'success'
+                : 'completed',
+          metadata: entry.metadata ?? {},
+        })),
+    );
   },
 
   async getLocationHistory(deviceId: string): Promise<LocationHistoryPoint[]> {
@@ -459,5 +521,25 @@ export const mockApiClient: ApiClient = {
     };
     appendAudit({ action: 'UPDATE_RETENTION_POLICY', targetType: 'settings', targetId: 'retention-policy', reason });
     return clone(settings.retentionPolicy);
+  },
+
+  async submitAbuseReport(payload) {
+    await wait();
+    appendAudit({
+      action: 'ABUSE_REPORT_SUBMITTED',
+      targetType: 'abuse_report',
+      targetId: payload.deviceId ?? `org-${Date.now()}`,
+      reason: payload.description,
+    });
+  },
+
+  async deprovisionDevice(deviceId: string, reason: string) {
+    await wait();
+    devices = devices.map((item) =>
+      item.id === deviceId
+        ? { ...item, status: 'unenrolled', online: false }
+        : item,
+    );
+    appendAudit({ action: 'DEVICE_DEPROVISIONED', targetType: 'device', targetId: deviceId, reason });
   },
 };

@@ -16,6 +16,20 @@ export type RemoteActionStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'DISPATCH
 
 export type Role = 'owner' | 'admin' | 'security';
 
+export interface OwnershipBindingRecord {
+  id: string;
+  orgId: string;
+  deviceId: string;
+  ownerSubject?: string;
+  ownershipType: 'single_user' | 'organization_owned';
+  proofKind: string;
+  consentVersion: string;
+  consentCapturedAt: string;
+  isActive: boolean;
+  createdAt: string;
+  endedAt?: string;
+}
+
 export interface UserProfile {
   id: string;
   fullName: string;
@@ -212,6 +226,16 @@ export interface AuditLogRecord {
   metadata?: Record<string, string | number | boolean | null>;
 }
 
+export interface AccessHistoryRecord {
+  id: string;
+  actor: string;
+  action: string;
+  occurredAt: string;
+  reason?: string;
+  result?: string;
+  metadata?: Record<string, string | number | boolean | null>;
+}
+
 export interface RemoteActionRecord {
   id: string;
   deviceId: string;
@@ -231,10 +255,23 @@ export interface RetentionPolicy {
   incidentEvidenceDays: number;
 }
 
+export interface PrivacyDefaults {
+  explicitConsentRequired: boolean;
+  visibleAppRequired: boolean;
+  backgroundLocationRequiresExplanation: boolean;
+  ownerAccessHistoryVisible: boolean;
+  approximateLocationsClearlyLabeled: boolean;
+  shortRetentionDefault: boolean;
+}
+
 export interface PlatformSettings {
+  orgId: string;
   timezone: string;
   defaultMapProvider: 'google' | 'mapbox';
   retentionPolicy: RetentionPolicy;
+  privacyDefaults: PrivacyDefaults;
+  updatedAt?: string;
+  updatedBySub?: string;
 }
 
 export interface LoginRequest {

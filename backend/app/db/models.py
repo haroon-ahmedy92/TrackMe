@@ -248,6 +248,11 @@ class NotificationStatus(str, enum.Enum):
     FAILED = 'failed'
 
 
+class DeprovisionStatus(str, enum.Enum):
+    REQUESTED = 'requested'
+    COMPLETED = 'completed'
+
+
 class GeofenceEventType(str, enum.Enum):
     ENTER = 'enter'
     EXIT = 'exit'
@@ -279,6 +284,9 @@ class Organization(Base):
     pairing_tokens: Mapped[list['PairingToken']] = relationship()
     ownership_transfers: Mapped[list['OwnershipTransfer']] = relationship()
     access_reviews: Mapped[list['AccessReview']] = relationship()
+    tenant_settings: Mapped[list['TenantSettings']] = relationship()
+    abuse_reports: Mapped[list['AbuseReport']] = relationship()
+    deprovision_requests: Mapped[list['DeprovisionRequest']] = relationship()
 
 
 class User(Base):
@@ -677,6 +685,56 @@ class DevicePushToken(Base):
     invalidated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     device: Mapped['Device'] = relationship(back_populates='push_tokens')
+
+
+class TenantSettings(Base):
+    __tablename__ = 'tenant_settings'
+    __table_args__ = (
+        UniqueConstraint('org_id', name='uq_tenant_settings_org'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('orgs.id'), nullable=False)
+    location_event_days: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
+    audit_log_days: Mapped[int] = mapped_column(Integer, nullable=False, default=90)
+    incident_evidence_days: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
+    updated_by_sub: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class AbuseReport(Base):
+    __tablename__ = 'abuse_reports'
+    __table_args__ = (
+        Index('ix_abuse_reports_org_created', 'org_id', 'created_at'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('orgs.id'), nullable=False)
+    device_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey('devices.id'), nullable=True)
+    category: Mapped[str] = mapped_column(String(64), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    contact_email: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    reported_by_sub: Mapped[str] = mapped_column(String(150), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default='submitted')
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class DeprovisionRequest(Base):
+    __tablename__ = 'deprovision_requests'
+    __table_args__ = (
+        Index('ix_deprovision_requests_org_created', 'org_id', 'created_at'),
+        Index('ix_deprovision_requests_device_status', 'device_id', 'status'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('orgs.id'), nullable=False)
+    device_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('devices.id'), nullable=False)
+    requested_by_sub: Mapped[str] = mapped_column(String(150), nullable=False)
+    reason: Mapped[str] = mapped_column(String(280), nullable=False)
+    status: Mapped[DeprovisionStatus] = mapped_column(Enum(DeprovisionStatus), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class AuditLog(Base):

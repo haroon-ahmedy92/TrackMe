@@ -3,6 +3,7 @@
 import { ConfidenceBadge } from '@/components/common/ConfidenceBadge';
 import { LoadingCard } from '@/components/common/LoadingCard';
 import { LocationPrecisionBadge } from '@/components/common/LocationPrecisionBadge';
+import { SensitiveActionModal } from '@/components/common/SensitiveActionModal';
 import { GeoSignalMap } from '@/components/maps/GeoSignalMap';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -19,17 +20,22 @@ export default function DeviceDetailsPage() {
   const params = useParams<{ id: string }>();
   const deviceId = params.id;
   const [windowHours, setWindowHours] = useState('24');
+  const [locateOpen, setLocateOpen] = useState(false);
+  const [deprovisionOpen, setDeprovisionOpen] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const state = useAsyncData(
     async () => {
-      const [device, lastKnownLocation, locationHistory, geofenceEvents, geofences] = await Promise.all([
+      const [device, binding, lastKnownLocation, locationHistory, geofenceEvents, geofences, accessHistory] = await Promise.all([
         apiClient.getDeviceById(deviceId),
+        apiClient.getDeviceBinding(deviceId),
         apiClient.getLastKnownLocation(deviceId),
         apiClient.getLocationHistory(deviceId, Number(windowHours)),
         apiClient.getGeofenceEvents(deviceId, Number(windowHours)),
         apiClient.getGeofences(),
+        apiClient.getDeviceAccessHistory(deviceId),
       ]);
-      return { device, lastKnownLocation, locationHistory, geofenceEvents, geofences };
+      return { device, binding, lastKnownLocation, locationHistory, geofenceEvents, geofences, accessHistory };
     },
     [deviceId, windowHours],
   );
@@ -56,8 +62,32 @@ export default function DeviceDetailsPage() {
     );
   }
 
-  const { device, lastKnownLocation, locationHistory, geofenceEvents, geofences } = state.data;
+  const { device, binding, lastKnownLocation, locationHistory, geofenceEvents, geofences, accessHistory } = state.data;
   const deviceGeofences = geofences.filter((geofence) => geofence.deviceId === device.id);
+
+  const locateDevice = async (reason: string) => {
+    setActionError(null);
+    try {
+      await apiClient.locateDevice(deviceId, reason);
+      setLocateOpen(false);
+      await state.refresh();
+    } catch (errorValue) {
+      setActionError(errorValue instanceof Error ? errorValue.message : 'Failed to locate device.');
+      throw errorValue;
+    }
+  };
+
+  const deprovisionDevice = async (reason: string) => {
+    setActionError(null);
+    try {
+      await apiClient.deprovisionDevice(deviceId, reason);
+      setDeprovisionOpen(false);
+      await state.refresh();
+    } catch (errorValue) {
+      setActionError(errorValue instanceof Error ? errorValue.message : 'Failed to deprovision device.');
+      throw errorValue;
+    }
+  };
 
   return (
     <div className="page container stack">
@@ -105,6 +135,19 @@ export default function DeviceDetailsPage() {
 
         <Card>
           <p className="text-muted" style={{ margin: 0 }}>
+            Consent record
+          </p>
+          <p style={{ margin: '8px 0', fontWeight: 700 }}>{binding?.consentVersion ?? 'Not available'}</p>
+          <p className="text-muted" style={{ margin: 0, fontSize: 13 }}>
+            Captured: {binding ? formatDateTime(binding.consentCapturedAt) : 'Unknown'}
+          </p>
+          <p className="text-muted" style={{ marginTop: 6, fontSize: 12 }}>
+            Ownership: {binding?.ownershipType?.replace('_', ' ') ?? 'Unknown'}
+          </p>
+        </Card>
+
+        <Card>
+          <p className="text-muted" style={{ margin: 0 }}>
             Battery
           </p>
           <p style={{ margin: '8px 0', fontWeight: 700 }}>{device.batteryLevel}%</p>
@@ -116,6 +159,32 @@ export default function DeviceDetailsPage() {
           </p>
         </Card>
       </div>
+
+      {actionError ? (
+        <Card>
+          <p style={{ margin: 0, color: 'var(--danger)' }}>{actionError}</p>
+        </Card>
+      ) : null}
+
+      <Card>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h2 style={{ marginTop: 0, marginBottom: 8 }}>Policy-safe actions</h2>
+            <p className="page-subtitle">
+              Locate actions require a reason and are always audited. Deprovision removes this device from active managed workflows.
+            </p>
+          </div>
+          <div className="row">
+            <Button onClick={() => setLocateOpen(true)}>Locate now</Button>
+            <Button variant="danger" onClick={() => setDeprovisionOpen(true)}>
+              Deprovision
+            </Button>
+          </div>
+        </div>
+        <p className="warning-note" style={{ marginTop: 16, marginBottom: 0 }}>
+          Approximate or stale results are shown as lower confidence and must not be presented as exact live recovery coordinates.
+        </p>
+      </Card>
 
       <Card>
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
@@ -184,6 +253,56 @@ export default function DeviceDetailsPage() {
           </div>
         </div>
       </Card>
+
+      <Card>
+        <h2 style={{ marginTop: 0, marginBottom: 8 }}>Access history</h2>
+        <p className="page-subtitle">Owners and authorized admins can review who requested location or changed device access state.</p>
+        <div className="stack" style={{ gap: 10, marginTop: 16 }}>
+          {accessHistory.length ? (
+            accessHistory.map((entry) => (
+              <div key={entry.id} style={{ borderLeft: '2px solid var(--border)', paddingLeft: 12 }}>
+                <p style={{ margin: 0, fontWeight: 700 }}>{entry.action.replaceAll('_', ' ')}</p>
+                <p className="text-muted" style={{ margin: '4px 0 0', fontSize: 13 }}>
+                  {entry.actor} • {formatDateTime(entry.occurredAt)}
+                </p>
+                {entry.reason ? (
+                  <p style={{ margin: '6px 0 0' }}>
+                    Reason: <strong>{entry.reason}</strong>
+                  </p>
+                ) : null}
+                {entry.result ? (
+                  <p className="text-muted" style={{ margin: '4px 0 0', fontSize: 12 }}>
+                    Result: {entry.result}
+                  </p>
+                ) : null}
+              </div>
+            ))
+          ) : (
+            <p className="text-muted" style={{ margin: 0 }}>
+              No locate or deprovision activity has been recorded for this device yet.
+            </p>
+          )}
+        </div>
+      </Card>
+
+      <SensitiveActionModal
+        open={locateOpen}
+        title="Locate device"
+        description="Explain why this lookup is necessary. The reason, actor, timestamp, device, and result will be written to the audit trail."
+        confirmLabel="Run locate"
+        onCancel={() => setLocateOpen(false)}
+        onConfirm={locateDevice}
+      />
+
+      <SensitiveActionModal
+        open={deprovisionOpen}
+        title="Deprovision device"
+        description="Explain why management should end. This action removes active locate permissions and records an immutable audit event."
+        confirmLabel="Deprovision device"
+        danger
+        onCancel={() => setDeprovisionOpen(false)}
+        onConfirm={deprovisionDevice}
+      />
     </div>
   );
 }

@@ -7,6 +7,7 @@ from app.services.case_management_service import CaseManagementService
 from app.services.case_evidence_service import CaseEvidenceService
 from app.services.command_queue_service import CommandQueueService
 from app.services.command_signing_service import CommandSigningService
+from app.services.compliance_service import ComplianceService
 from app.services.device_key_service import DeviceKeyService
 from app.services.device_registry_service import DeviceRegistryService
 from app.services.enrollment_service import EnrollmentService
@@ -154,3 +155,7 @@ def get_command_queue_service() -> CommandQueueService:
 
 def get_observability_service() -> ObservabilityService:
     return ObservabilityService()
+
+
+def get_compliance_service() -> ComplianceService:
+    return ComplianceService()
