@@ -32,6 +32,9 @@ class Settings(BaseModel):
     command_signing_secret: str | None = None
     command_default_ttl_minutes: int = 60
     command_max_attempts: int = 5
+    geofence_alert_cooldown_seconds: int = 1800
+    spatial_default_history_hours: int = 24
+    spatial_max_history_hours: int = 168
 
 
 settings = Settings()
@@ -60,3 +63,12 @@ settings.fcm_endpoint = os.getenv('FCM_ENDPOINT', settings.fcm_endpoint)
 settings.command_signing_secret = os.getenv('COMMAND_SIGNING_SECRET', settings.command_signing_secret)
 settings.command_default_ttl_minutes = int(os.getenv('COMMAND_DEFAULT_TTL_MINUTES', settings.command_default_ttl_minutes))
 settings.command_max_attempts = int(os.getenv('COMMAND_MAX_ATTEMPTS', settings.command_max_attempts))
+settings.geofence_alert_cooldown_seconds = int(
+    os.getenv('GEOFENCE_ALERT_COOLDOWN_SECONDS', settings.geofence_alert_cooldown_seconds)
+)
+settings.spatial_default_history_hours = int(
+    os.getenv('SPATIAL_DEFAULT_HISTORY_HOURS', settings.spatial_default_history_hours)
+)
+settings.spatial_max_history_hours = int(
+    os.getenv('SPATIAL_MAX_HISTORY_HOURS', settings.spatial_max_history_hours)
+)

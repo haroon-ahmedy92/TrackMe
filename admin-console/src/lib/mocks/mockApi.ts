@@ -2,18 +2,27 @@ import { ApiError } from '@/lib/api/errors';
 import type { ApiClient } from '@/lib/api/types';
 import {
   mockAuditLogs,
+  mockDeviceClusters,
   mockDevices,
   mockGeofences,
+  mockGeofenceEvents,
   mockIncidentTimeline,
+  mockIncidentRoutes,
   mockIncidents,
+  mockLocationHistory,
   mockRemoteActions,
   mockSettings,
 } from '@/lib/mocks/data';
 import type {
+  DeviceClusterRecord,
   GeofenceRecord,
+  GeofenceEventRecord,
   IncidentRecord,
+  IncidentRouteRecord,
   LoginRequest,
   LoginResponse,
+  LocationHistoryPoint,
+  LocationSnapshot,
   RemoteActionRecord,
 } from '@/types/models';
 
@@ -32,6 +41,10 @@ let geofences = clone(mockGeofences);
 let auditLogs = clone(mockAuditLogs);
 let remoteActions = clone(mockRemoteActions);
 let settings = clone(mockSettings);
+let locationHistory = clone(mockLocationHistory);
+let geofenceEvents = clone(mockGeofenceEvents);
+let incidentRoutes = clone(mockIncidentRoutes);
+let deviceClusters = clone(mockDeviceClusters);
 
 const appendAudit = (entry: {
   action: string;
@@ -90,6 +103,22 @@ export const mockApiClient: ApiClient = {
     return clone(device);
   },
 
+  async getLastKnownLocation(deviceId: string): Promise<LocationSnapshot | null> {
+    await wait();
+    const history = locationHistory[deviceId] ?? [];
+    return clone(history[history.length - 1] ?? devices.find((item) => item.id === deviceId)?.location ?? null);
+  },
+
+  async getLocationHistory(deviceId: string): Promise<LocationHistoryPoint[]> {
+    await wait();
+    return clone(locationHistory[deviceId] ?? []);
+  },
+
+  async getDeviceClusters(): Promise<DeviceClusterRecord[]> {
+    await wait();
+    return clone(deviceClusters);
+  },
+
   async getIncidents() {
     await wait();
     return clone(incidents);
@@ -98,6 +127,15 @@ export const mockApiClient: ApiClient = {
   async getIncidentTimeline(incidentId: string) {
     await wait();
     return clone(timeline.filter((event) => event.incidentId === incidentId));
+  },
+
+  async getIncidentRoute(incidentId: string): Promise<IncidentRouteRecord> {
+    await wait();
+    const route = incidentRoutes[incidentId];
+    if (!route) {
+      throw new ApiError('Incident route not found', 404);
+    }
+    return clone(route);
   },
 
   async markDeviceLost(deviceId: string, reason: string) {
@@ -206,6 +244,11 @@ export const mockApiClient: ApiClient = {
   async getGeofences() {
     await wait();
     return clone(geofences);
+  },
+
+  async getGeofenceEvents(deviceId: string): Promise<GeofenceEventRecord[]> {
+    await wait();
+    return clone(geofenceEvents.filter((event) => event.deviceId === deviceId));
   },
 
   async upsertGeofence(geofenceInput) {

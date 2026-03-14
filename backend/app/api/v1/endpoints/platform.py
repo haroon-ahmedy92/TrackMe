@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
@@ -19,14 +20,16 @@ from app.api.deps import (
     get_notification_event_service,
     get_remote_action_service,
     get_rules_engine_service,
+    get_spatial_service,
     get_tenant_service,
 )
 from app.core.security import Principal, Role, require_roles
 from app.db.base import get_db_session
-from app.db.models import AuditLog
+from app.db.models import AuditLog, GeofenceEvent, Incident, LocationEvent
 from app.schemas.platform import (
     AuditLogResponse,
     AuditLogChainVerificationResponse,
+    DeviceClusterResponse,
     DeviceKeyRegisterRequest,
     DeviceKeyRotateRequest,
     DeviceKeyResponse,
@@ -35,13 +38,17 @@ from app.schemas.platform import (
     EnrollmentCreateRequest,
     EnrollmentResponse,
     GeofenceCreateRequest,
+    GeofenceEventResponse,
     GeofenceResponse,
+    GeofenceUpdateRequest,
     IncidentCreateRequest,
     IncidentEventResponse,
+    IncidentRouteResponse,
     IncidentResponse,
     IncidentTransitionRequest,
     IpEnrichmentRequest,
     IpEnrichmentResponse,
+    LocationEventPointResponse,
     LocationIngestRequest,
     LocationIngestResponse,
     NotificationCreateRequest,
@@ -66,6 +73,7 @@ from app.services.location_ingestion_service import LocationIngestionService
 from app.services.notification_event_service import NotificationEventService
 from app.services.remote_action_service import RemoteActionService
 from app.services.rules_engine_service import RulesEngineService
+from app.services.spatial_service import SpatialService
 from app.services.tenant_service import TenantService
 
 router = APIRouter(prefix='/platform', tags=['platform'])
@@ -580,9 +588,224 @@ async def create_geofence(
         org_id=geofence.org_id,
         device_id=geofence.device_id,
         name=geofence.name,
+        center_latitude=float(geofence.center_latitude),
+        center_longitude=float(geofence.center_longitude),
         radius_meters=geofence.radius_meters,
         is_enabled=geofence.is_enabled,
         created_at=geofence.created_at,
+    )
+
+
+@router.get('/geofences', response_model=list[GeofenceResponse])
+async def list_geofences(
+    org_id: UUID = Query(...),
+    device_id: UUID | None = Query(default=None),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.OWNER)),
+    session: AsyncSession = Depends(get_db_session),
+    service: GeofenceService = Depends(get_geofence_service),
+) -> list[GeofenceResponse]:
+    _assert_org_access(principal, org_id)
+    geofences = await service.list_geofences(session, org_id=org_id, device_id=device_id)
+    return [
+        GeofenceResponse(
+            geofence_id=geofence.id,
+            org_id=geofence.org_id,
+            device_id=geofence.device_id,
+            name=geofence.name,
+            center_latitude=float(geofence.center_latitude),
+            center_longitude=float(geofence.center_longitude),
+            radius_meters=geofence.radius_meters,
+            is_enabled=geofence.is_enabled,
+            created_at=geofence.created_at,
+        )
+        for geofence in geofences
+    ]
+
+
+@router.put('/geofences/{geofence_id}', response_model=GeofenceResponse)
+async def update_geofence(
+    geofence_id: UUID,
+    payload: GeofenceUpdateRequest,
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY)),
+    session: AsyncSession = Depends(get_db_session),
+    service: GeofenceService = Depends(get_geofence_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> GeofenceResponse:
+    _assert_org_access(principal, payload.org_id)
+    geofence = await service.update_geofence(session, geofence_id=geofence_id, payload=payload)
+    await audit_log_service.append(
+        session,
+        org_id=str(payload.org_id),
+        actor_sub=principal.subject,
+        action='GEOFENCE_UPDATED',
+        entity_type='geofence',
+        entity_id=str(geofence.id),
+        metadata={
+            'name': geofence.name,
+            'radius_meters': geofence.radius_meters,
+            'device_id': str(geofence.device_id) if geofence.device_id else None,
+            'is_enabled': geofence.is_enabled,
+        },
+    )
+    await session.commit()
+    return GeofenceResponse(
+        geofence_id=geofence.id,
+        org_id=geofence.org_id,
+        device_id=geofence.device_id,
+        name=geofence.name,
+        center_latitude=float(geofence.center_latitude),
+        center_longitude=float(geofence.center_longitude),
+        radius_meters=geofence.radius_meters,
+        is_enabled=geofence.is_enabled,
+        created_at=geofence.created_at,
+    )
+
+
+@router.delete('/geofences/{geofence_id}', status_code=status.HTTP_204_NO_CONTENT)
+async def delete_geofence(
+    geofence_id: UUID,
+    org_id: UUID = Query(...),
+    reason: str = Query(..., min_length=2, max_length=250),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY)),
+    session: AsyncSession = Depends(get_db_session),
+    service: GeofenceService = Depends(get_geofence_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> None:
+    _assert_org_access(principal, org_id)
+    geofence = await service.delete_geofence(session, geofence_id=geofence_id, org_id=org_id)
+    await audit_log_service.append(
+        session,
+        org_id=str(org_id),
+        actor_sub=principal.subject,
+        action='GEOFENCE_DELETED',
+        entity_type='geofence',
+        entity_id=str(geofence.id),
+        metadata={'name': geofence.name, 'reason': reason},
+    )
+    await session.commit()
+
+
+@router.get('/devices/{device_id}/last-location', response_model=LocationEventPointResponse | None)
+async def get_last_known_location(
+    device_id: UUID,
+    org_id: UUID = Query(...),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.OWNER)),
+    session: AsyncSession = Depends(get_db_session),
+    spatial_service: SpatialService = Depends(get_spatial_service),
+) -> LocationEventPointResponse | None:
+    _assert_org_access(principal, org_id)
+    event = await spatial_service.get_last_known_location(session, org_id=org_id, device_id=device_id)
+    return _location_event_out(event, spatial_service) if event else None
+
+
+@router.get('/devices/{device_id}/location-history', response_model=list[LocationEventPointResponse])
+async def get_location_history(
+    device_id: UUID,
+    org_id: UUID = Query(...),
+    starts_at: datetime | None = Query(default=None),
+    ends_at: datetime | None = Query(default=None),
+    limit: int = Query(default=250, ge=1, le=1000),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.OWNER)),
+    session: AsyncSession = Depends(get_db_session),
+    spatial_service: SpatialService = Depends(get_spatial_service),
+) -> list[LocationEventPointResponse]:
+    _assert_org_access(principal, org_id)
+    history = await spatial_service.get_location_history(
+        session,
+        org_id=org_id,
+        device_id=device_id,
+        starts_at=starts_at,
+        ends_at=ends_at,
+        limit=limit,
+    )
+    return [_location_event_out(event, spatial_service) for event in history]
+
+
+@router.get('/devices/{device_id}/geofence-events', response_model=list[GeofenceEventResponse])
+async def get_device_geofence_events(
+    device_id: UUID,
+    org_id: UUID = Query(...),
+    starts_at: datetime | None = Query(default=None),
+    ends_at: datetime | None = Query(default=None),
+    limit: int = Query(default=250, ge=1, le=1000),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.OWNER)),
+    session: AsyncSession = Depends(get_db_session),
+    spatial_service: SpatialService = Depends(get_spatial_service),
+) -> list[GeofenceEventResponse]:
+    _assert_org_access(principal, org_id)
+    window = spatial_service.normalize_window(starts_at=starts_at, ends_at=ends_at)
+    events = await spatial_service.get_geofence_events(
+        session,
+        org_id=org_id,
+        device_id=device_id,
+        starts_at=window.starts_at,
+        ends_at=window.ends_at,
+        limit=limit,
+    )
+    return [_geofence_event_out(event, geofence_name) for event, geofence_name in events]
+
+
+@router.get('/devices/clusters', response_model=list[DeviceClusterResponse])
+async def get_device_clusters(
+    org_id: UUID = Query(...),
+    starts_at: datetime | None = Query(default=None),
+    ends_at: datetime | None = Query(default=None),
+    cell_size_meters: int = Query(default=10000, ge=500, le=100000),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.OWNER)),
+    session: AsyncSession = Depends(get_db_session),
+    spatial_service: SpatialService = Depends(get_spatial_service),
+) -> list[DeviceClusterResponse]:
+    _assert_org_access(principal, org_id)
+    clusters = await spatial_service.get_device_clusters(
+        session,
+        org_id=org_id,
+        starts_at=starts_at,
+        ends_at=ends_at,
+        cell_size_meters=cell_size_meters,
+    )
+    return [
+        DeviceClusterResponse(
+            cluster_id=str(row['cluster_id']),
+            center_latitude=float(row['center_latitude']),
+            center_longitude=float(row['center_longitude']),
+            device_count=int(row['device_count']),
+            approximate_count=int(row['approximate_count']),
+            precise_count=int(row['precise_count']),
+            moderate_count=int(row['moderate_count']),
+            latest_captured_at=row['latest_captured_at'],
+            device_ids=list(row['device_ids'] or []),
+        )
+        for row in clusters
+    ]
+
+
+@router.get('/cases/{incident_id}/route', response_model=IncidentRouteResponse)
+async def get_incident_route(
+    incident_id: UUID,
+    org_id: UUID = Query(...),
+    starts_at: datetime | None = Query(default=None),
+    ends_at: datetime | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=1000),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.OWNER, Role.AUDITOR)),
+    session: AsyncSession = Depends(get_db_session),
+    spatial_service: SpatialService = Depends(get_spatial_service),
+) -> IncidentRouteResponse:
+    _assert_org_access(principal, org_id)
+    incident, points, geofence_events, window = await spatial_service.get_incident_route(
+        session,
+        org_id=org_id,
+        incident_id=incident_id,
+        starts_at=starts_at,
+        ends_at=ends_at,
+        limit=limit,
+    )
+    return IncidentRouteResponse(
+        incident_id=incident.id,
+        device_id=incident.device_id,
+        started_at=window.starts_at,
+        ended_at=window.ends_at,
+        points=[_location_event_out(point, spatial_service) for point in points],
+        geofence_events=[_geofence_event_out(event, geofence_name) for event, geofence_name in geofence_events],
     )
 
 
@@ -682,4 +905,36 @@ def _incident_response(incident) -> IncidentResponse:
         wipe_scheduled_at=incident.wipe_scheduled_at,
         created_at=incident.created_at,
         updated_at=incident.updated_at,
+    )
+
+
+def _location_event_out(event: LocationEvent, spatial_service: SpatialService) -> LocationEventPointResponse:
+    methods = list((event.source_methods or {}).get('methods', []))
+    return LocationEventPointResponse(
+        event_id=event.id,
+        device_id=event.device_id,
+        captured_at=event.captured_at,
+        latitude=float(event.latitude) if event.latitude is not None else None,
+        longitude=float(event.longitude) if event.longitude is not None else None,
+        accuracy_meters=float(event.accuracy_meters) if event.accuracy_meters is not None else None,
+        precision=event.precision,
+        confidence_score=event.confidence_score,
+        source_methods=methods,
+        is_ip_approximate=bool(event.is_ip_approximate),
+        source_label=spatial_service.source_label_for(event),
+    )
+
+
+def _geofence_event_out(event: GeofenceEvent, geofence_name: str | None = None) -> GeofenceEventResponse:
+    return GeofenceEventResponse(
+        geofence_event_id=event.id,
+        geofence_id=event.geofence_id,
+        geofence_name=geofence_name,
+        device_id=event.device_id,
+        event_type=event.event_type,
+        precision=event.precision,
+        confidence_score=event.confidence_score,
+        alert_emitted=event.alert_emitted,
+        suppressed_reason=event.suppressed_reason,
+        triggered_at=event.triggered_at,
     )

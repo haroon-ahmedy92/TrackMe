@@ -3,25 +3,38 @@
 import { ConfidenceBadge } from '@/components/common/ConfidenceBadge';
 import { LoadingCard } from '@/components/common/LoadingCard';
 import { LocationPrecisionBadge } from '@/components/common/LocationPrecisionBadge';
+import { GeoSignalMap } from '@/components/maps/GeoSignalMap';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Select } from '@/components/ui/Select';
 import { apiClient } from '@/lib/api/client';
 import { formatDateTime } from '@/lib/format';
 import { useAsyncData } from '@/lib/hooks/useAsyncData';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useState } from 'react';
 
 export default function DeviceDetailsPage() {
   const params = useParams<{ id: string }>();
   const deviceId = params.id;
+  const [windowHours, setWindowHours] = useState('24');
 
-  const { data: device, loading, error, refresh } = useAsyncData(
-    () => apiClient.getDeviceById(deviceId),
-    [deviceId],
+  const state = useAsyncData(
+    async () => {
+      const [device, lastKnownLocation, locationHistory, geofenceEvents, geofences] = await Promise.all([
+        apiClient.getDeviceById(deviceId),
+        apiClient.getLastKnownLocation(deviceId),
+        apiClient.getLocationHistory(deviceId, Number(windowHours)),
+        apiClient.getGeofenceEvents(deviceId, Number(windowHours)),
+        apiClient.getGeofences(),
+      ]);
+      return { device, lastKnownLocation, locationHistory, geofenceEvents, geofences };
+    },
+    [deviceId, windowHours],
   );
 
-  if (loading) {
+  if (state.loading) {
     return (
       <div className="page">
         <LoadingCard />
@@ -29,19 +42,22 @@ export default function DeviceDetailsPage() {
     );
   }
 
-  if (error || !device) {
+  if (state.error || !state.data) {
     return (
       <div className="page">
         <Card>
-          <p style={{ margin: 0, color: 'var(--danger)' }}>{error ?? 'Device not found.'}</p>
+          <p style={{ margin: 0, color: 'var(--danger)' }}>{state.error ?? 'Device not found.'}</p>
           <div className="row" style={{ marginTop: 12 }}>
-            <Button onClick={() => void refresh()}>Retry</Button>
+            <Button onClick={() => void state.refresh()}>Retry</Button>
             <Link href="/devices">Back to inventory</Link>
           </div>
         </Card>
       </div>
     );
   }
+
+  const { device, lastKnownLocation, locationHistory, geofenceEvents, geofences } = state.data;
+  const deviceGeofences = geofences.filter((geofence) => geofence.deviceId === device.id);
 
   return (
     <div className="page container stack">
@@ -59,7 +75,9 @@ export default function DeviceDetailsPage() {
 
       <div className="grid-3">
         <Card>
-          <p className="text-muted" style={{ margin: 0 }}>Managed state</p>
+          <p className="text-muted" style={{ margin: 0 }}>
+            Managed state
+          </p>
           <p style={{ margin: '8px 0', fontWeight: 700 }}>{device.status.replace('_', ' ')}</p>
           <Badge variant={device.online ? 'success' : 'warning'}>{device.online ? 'Online' : 'Offline'}</Badge>
           <p className="text-muted" style={{ marginTop: 10, fontSize: 13 }}>
@@ -68,7 +86,9 @@ export default function DeviceDetailsPage() {
         </Card>
 
         <Card>
-          <p className="text-muted" style={{ margin: 0 }}>Location quality</p>
+          <p className="text-muted" style={{ margin: 0 }}>
+            Location quality
+          </p>
           <div className="row" style={{ marginTop: 10 }}>
             <LocationPrecisionBadge precision={device.location.precision} />
             <ConfidenceBadge score={device.location.confidenceScore} />
@@ -84,7 +104,9 @@ export default function DeviceDetailsPage() {
         </Card>
 
         <Card>
-          <p className="text-muted" style={{ margin: 0 }}>Battery</p>
+          <p className="text-muted" style={{ margin: 0 }}>
+            Battery
+          </p>
           <p style={{ margin: '8px 0', fontWeight: 700 }}>{device.batteryLevel}%</p>
           <p className="text-muted" style={{ margin: 0, fontSize: 13 }}>
             Enrolled: {formatDateTime(device.enrollmentDate)}
@@ -96,40 +118,69 @@ export default function DeviceDetailsPage() {
       </div>
 
       <Card>
-        <h2 style={{ marginTop: 0, marginBottom: 8 }}>Last Known Location</h2>
-        <p className="page-subtitle">
-          Approximate methods (for example backend IP geolocation) are never treated as exact recovery points.
-        </p>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          <div>
+            <h2 style={{ marginTop: 0, marginBottom: 8 }}>Last Known Location & Route</h2>
+            <p className="page-subtitle">
+              History playback is time bounded. Approximate methods stay clearly separated from fused or GPS fixes.
+            </p>
+          </div>
+          <Select
+            label="Playback window"
+            value={windowHours}
+            onChange={(event) => setWindowHours(event.target.value)}
+            options={[
+              { label: '6 hours', value: '6' },
+              { label: '24 hours', value: '24' },
+              { label: '72 hours', value: '72' },
+            ]}
+          />
+        </div>
 
-        <div className="grid-2" style={{ marginTop: 14 }}>
+        <div style={{ marginTop: 16 }}>
+          <GeoSignalMap
+            title="No mappable history for this device yet"
+            points={lastKnownLocation ? [{ id: 'last-known', ...lastKnownLocation, label: device.deviceName }] : []}
+            routePoints={locationHistory}
+            geofences={deviceGeofences}
+            height={340}
+          />
+        </div>
+
+        <div className="grid-2" style={{ marginTop: 16 }}>
           <div className="stack" style={{ gap: 8 }}>
             <p style={{ margin: 0 }}>
-              Latitude: <strong>{device.location.latitude ?? 'N/A'}</strong>
+              Latitude: <strong>{lastKnownLocation?.latitude ?? 'N/A'}</strong>
             </p>
             <p style={{ margin: 0 }}>
-              Longitude: <strong>{device.location.longitude ?? 'N/A'}</strong>
+              Longitude: <strong>{lastKnownLocation?.longitude ?? 'N/A'}</strong>
             </p>
             <p style={{ margin: 0 }}>
-              Accuracy: <strong>{device.location.accuracyMeters ?? 'Unknown'} meters</strong>
+              Accuracy: <strong>{lastKnownLocation?.accuracyMeters ?? 'Unknown'} meters</strong>
             </p>
             <p style={{ margin: 0 }}>
-              Captured: <strong>{formatDateTime(device.location.collectedAt)}</strong>
+              Captured: <strong>{lastKnownLocation ? formatDateTime(lastKnownLocation.collectedAt) : 'N/A'}</strong>
             </p>
           </div>
 
-          <div
-            style={{
-              borderRadius: 12,
-              border: '1px solid var(--border)',
-              background: 'var(--surface-muted)',
-              minHeight: 180,
-              padding: 12,
-            }}
-          >
-            <p style={{ margin: 0, fontWeight: 700 }}>Map provider placeholder</p>
-            <p className="text-muted" style={{ marginTop: 6, fontSize: 13 }}>
-              TODO: render interactive map through provider abstraction (Google Maps / Mapbox).
-            </p>
+          <div className="stack" style={{ gap: 8 }}>
+            <p style={{ margin: 0, fontWeight: 700 }}>Geofence activity</p>
+            {geofenceEvents.length ? (
+              geofenceEvents.slice(-4).reverse().map((event) => (
+                <div key={event.id} style={{ borderLeft: '2px solid var(--border)', paddingLeft: 10 }}>
+                  <p style={{ margin: 0, fontWeight: 600 }}>
+                    {event.eventType.toUpperCase()} • {event.geofenceName}
+                  </p>
+                  <p className="text-muted" style={{ margin: '4px 0 0', fontSize: 12 }}>
+                    {formatDateTime(event.triggeredAt)}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="text-muted" style={{ margin: 0 }}>
+                No recent geofence events in this playback window.
+              </p>
+            )}
           </div>
         </div>
       </Card>

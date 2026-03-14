@@ -22,6 +22,7 @@ from app.services.notification_template_service import NotificationTemplateServi
 from app.services.ownership_access_service import OwnershipAccessService
 from app.services.remote_action_service import RemoteActionService
 from app.services.rules_engine_service import RulesEngineService
+from app.services.spatial_service import SpatialService
 from app.services.signed_telemetry_service import SignedTelemetryService
 from app.services.tenant_service import TenantService
 from app.services.telemetry_service import TelemetryService
@@ -96,6 +97,7 @@ def get_location_ingestion_service() -> LocationIngestionService:
         integrity_verification_service=get_integrity_verification_service(),
         ip_enrichment_service=get_ip_enrichment_service(),
         rules_engine_service=get_rules_engine_service(),
+        geofence_service=get_geofence_service(),
     )
 
 
@@ -113,6 +115,10 @@ def get_notification_event_service() -> NotificationEventService:
 
 def get_geofence_service() -> GeofenceService:
     return GeofenceService()
+
+
+def get_spatial_service() -> SpatialService:
+    return SpatialService()
 
 
 def get_ownership_access_service() -> OwnershipAccessService:

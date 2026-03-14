@@ -23,6 +23,14 @@ class LocationRepositoryImpl @Inject constructor(
         return locationDao.observeLatest().map { it?.toDomain() }
     }
 
+    override fun observeRecentHistory(limit: Int): Flow<List<LocationSnapshot>> {
+        return locationDao.observeRecent(limit).map { entities ->
+            entities
+                .asReversed()
+                .map { it.toDomain() }
+        }
+    }
+
     override suspend fun captureCurrentLocation(source: String): LocationSnapshot? {
         val snapshot = locationProvider.getCurrentLocation(source) ?: return null
         locationDao.insert(

@@ -32,7 +32,15 @@ export interface LocationSnapshot {
   confidenceScore: number;
   collectedAt: string;
   sourceLabel: string;
+  sourceMethods?: string[];
+  isApproximate?: boolean;
+  geofenceTransition?: string | null;
   notes?: string;
+}
+
+export interface LocationHistoryPoint extends LocationSnapshot {
+  id: string;
+  deviceId: string;
 }
 
 export interface DeviceRecord {
@@ -77,11 +85,46 @@ export interface GeofenceRecord {
   id: string;
   name: string;
   deviceId: string;
+  deviceName?: string;
   centerLat: number;
   centerLng: number;
   radiusMeters: number;
   active: boolean;
   createdAt: string;
+}
+
+export interface GeofenceEventRecord {
+  id: string;
+  geofenceId: string;
+  geofenceName: string;
+  deviceId: string;
+  eventType: 'enter' | 'exit';
+  precision: LocationPrecision;
+  confidenceScore: number;
+  alertEmitted: boolean;
+  suppressedReason?: string;
+  triggeredAt: string;
+}
+
+export interface DeviceClusterRecord {
+  id: string;
+  centerLat: number;
+  centerLng: number;
+  deviceCount: number;
+  approximateCount: number;
+  preciseCount: number;
+  moderateCount: number;
+  latestCapturedAt?: string;
+  deviceIds: string[];
+}
+
+export interface IncidentRouteRecord {
+  incidentId: string;
+  deviceId: string;
+  startedAt: string;
+  endedAt: string;
+  points: LocationHistoryPoint[];
+  geofenceEvents: GeofenceEventRecord[];
 }
 
 export interface AuditLogRecord {

@@ -14,4 +14,7 @@ interface LocationDao {
 
     @Query("SELECT * FROM location_samples ORDER BY capturedAtEpochMs DESC LIMIT 1")
     fun observeLatest(): Flow<LocationSampleEntity?>
+
+    @Query("SELECT * FROM location_samples ORDER BY capturedAtEpochMs DESC LIMIT :limit")
+    fun observeRecent(limit: Int): Flow<List<LocationSampleEntity>>
 }

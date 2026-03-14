@@ -13,6 +13,7 @@ from app.schemas.platform import LocationIngestRequest
 from app.services.integrity_verification_service import IntegrityVerificationService
 from app.services.ip_enrichment_service import IpEnrichmentService
 from app.services.rules_engine_service import RulesEngineService
+from app.services.geofence_service import GeofenceService
 from app.services.signed_telemetry_service import SignedTelemetryService
 
 
@@ -33,11 +34,13 @@ class LocationIngestionService:
         integrity_verification_service: IntegrityVerificationService,
         ip_enrichment_service: IpEnrichmentService,
         rules_engine_service: RulesEngineService,
+        geofence_service: GeofenceService,
     ) -> None:
         self.signed_telemetry_service = signed_telemetry_service
         self.integrity_verification_service = integrity_verification_service
         self.ip_enrichment_service = ip_enrichment_service
         self.rules_engine_service = rules_engine_service
+        self.geofence_service = geofence_service
 
     async def ingest(self, session: AsyncSession, payload: LocationIngestRequest) -> IngestionResult:
         device = (await session.execute(select(Device).where(Device.id == payload.device_id))).scalar_one_or_none()
@@ -117,10 +120,12 @@ class LocationIngestionService:
         )
         session.add(event)
         await session.flush()
+        geofence_events = await self.geofence_service.process_location_event(session, location_event=event)
+        geofence_matches = [f'GEOFENCE_{geofence_event.event_type.value.upper()}:{geofence_event.geofence_id}' for geofence_event in geofence_events]
         return IngestionResult(
             event=event,
             duplicate=False,
-            rule_matches=rules.matches,
+            rule_matches=sorted(set([*rules.matches, *geofence_matches])),
             suspicious_alerts=alerts,
             telemetry_digest_matches=telemetry_digest_matches,
             integrity_status=integrity.status,

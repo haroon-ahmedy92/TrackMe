@@ -2,6 +2,7 @@
 
 import { LoadingCard } from '@/components/common/LoadingCard';
 import { SensitiveActionModal } from '@/components/common/SensitiveActionModal';
+import { GeoSignalMap } from '@/components/maps/GeoSignalMap';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -44,6 +45,23 @@ export default function GeofencesPage() {
   const [saving, setSaving] = useState(false);
 
   const canSave = draft.name && draft.deviceId && draft.centerLat && draft.centerLng && draft.radiusMeters;
+  const previewGeofences = [
+    ...(geofenceState.data ?? []),
+    ...(draft.centerLat && draft.centerLng && draft.name
+      ? [
+          {
+            id: draft.id ?? 'draft-geofence',
+            name: draft.name,
+            deviceId: draft.deviceId,
+            centerLat: Number(draft.centerLat),
+            centerLng: Number(draft.centerLng),
+            radiusMeters: Number(draft.radiusMeters),
+            active: draft.active,
+            createdAt: new Date().toISOString(),
+          },
+        ]
+      : []),
+  ];
 
   const handleEdit = (record: GeofenceRecord) => {
     setDraft({
@@ -194,55 +212,79 @@ export default function GeofencesPage() {
         </Card>
 
         <Card>
-          <DataTable
-            rows={geofenceState.data ?? []}
-            rowKey={(item) => item.id}
-            columns={[
-              {
-                key: 'name',
-                header: 'Name',
-                cell: (item) => (
-                  <div className="stack" style={{ gap: 4 }}>
-                    <span style={{ fontWeight: 700 }}>{item.name}</span>
-                    <span className="text-muted" style={{ fontSize: 12 }}>
-                      {item.centerLat.toFixed(4)}, {item.centerLng.toFixed(4)}
-                    </span>
-                  </div>
-                ),
-              },
-              {
-                key: 'radius',
-                header: 'Radius',
-                cell: (item) => `${item.radiusMeters}m`,
-              },
-              {
-                key: 'status',
-                header: 'Status',
-                cell: (item) => <Badge variant={item.active ? 'success' : 'neutral'}>{item.active ? 'Active' : 'Inactive'}</Badge>,
-              },
-              {
-                key: 'created',
-                header: 'Created',
-                cell: (item) => formatDateTime(item.createdAt),
-              },
-              {
-                key: 'actions',
-                header: 'Actions',
-                cell: (item) => (
-                  <div className="row">
-                    <Button variant="ghost" onClick={() => handleEdit(item)}>
-                      Edit
-                    </Button>
-                    <Button variant="danger" onClick={() => setPendingDelete(item)}>
-                      Delete
-                    </Button>
-                  </div>
-                ),
-              },
-            ]}
+          <h2 style={{ marginTop: 0, marginBottom: 10 }}>Zone map preview</h2>
+          <GeoSignalMap
+            title="Add coordinates to preview the geofence"
+            geofences={previewGeofences}
+            points={(devicesState.data ?? [])
+              .filter((device) => device.location.latitude != null && device.location.longitude != null)
+              .map((device) => ({
+                id: device.id,
+                label: device.deviceName,
+                latitude: device.location.latitude,
+                longitude: device.location.longitude,
+                precision: device.location.precision,
+                confidenceScore: device.location.confidenceScore,
+                sourceLabel: device.location.sourceLabel,
+                collectedAt: device.location.collectedAt,
+                isApproximate: device.location.isApproximate,
+              }))}
+            height={300}
           />
         </Card>
       </div>
+
+      <Card>
+        <DataTable
+          rows={geofenceState.data ?? []}
+          rowKey={(item) => item.id}
+          columns={[
+            {
+              key: 'name',
+              header: 'Name',
+              cell: (item) => (
+                <div className="stack" style={{ gap: 4 }}>
+                  <span style={{ fontWeight: 700 }}>{item.name}</span>
+                  <span className="text-muted" style={{ fontSize: 12 }}>
+                    {item.centerLat.toFixed(4)}, {item.centerLng.toFixed(4)}
+                  </span>
+                </div>
+              ),
+            },
+            {
+              key: 'radius',
+              header: 'Radius',
+              cell: (item) => `${item.radiusMeters}m`,
+            },
+            {
+              key: 'status',
+              header: 'Status',
+              cell: (item) => (
+                <Badge variant={item.active ? 'success' : 'neutral'}>{item.active ? 'Active' : 'Inactive'}</Badge>
+              ),
+            },
+            {
+              key: 'created',
+              header: 'Created',
+              cell: (item) => formatDateTime(item.createdAt),
+            },
+            {
+              key: 'actions',
+              header: 'Actions',
+              cell: (item) => (
+                <div className="row">
+                  <Button variant="ghost" onClick={() => handleEdit(item)}>
+                    Edit
+                  </Button>
+                  <Button variant="danger" onClick={() => setPendingDelete(item)}>
+                    Delete
+                  </Button>
+                </div>
+              ),
+            },
+          ]}
+        />
+      </Card>
 
       <SensitiveActionModal
         open={confirmMode === 'save'}

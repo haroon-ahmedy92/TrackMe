@@ -247,6 +247,11 @@ class NotificationStatus(str, enum.Enum):
     FAILED = 'failed'
 
 
+class GeofenceEventType(str, enum.Enum):
+    ENTER = 'enter'
+    EXIT = 'exit'
+
+
 class Organization(Base):
     __tablename__ = 'orgs'
 
@@ -518,6 +523,30 @@ class Geofence(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     device: Mapped['Device | None'] = relationship(back_populates='geofences')
+
+
+class GeofenceEvent(Base):
+    __tablename__ = 'geofence_events'
+    __table_args__ = (
+        Index('ix_geofence_events_org_triggered', 'org_id', 'triggered_at'),
+        Index('ix_geofence_events_device_triggered', 'device_id', 'triggered_at'),
+        Index('ix_geofence_events_geofence_triggered', 'geofence_id', 'triggered_at'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('orgs.id'), nullable=False)
+    geofence_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('geofences.id'), nullable=False)
+    device_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('devices.id'), nullable=False)
+    location_event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('location_events.id'), nullable=False)
+    event_type: Mapped[GeofenceEventType] = mapped_column(Enum(GeofenceEventType), nullable=False)
+    precision: Mapped[LocationPrecision] = mapped_column(Enum(LocationPrecision), nullable=False)
+    confidence_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    latitude: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
+    alert_emitted: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    suppressed_reason: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    triggered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class RemoteAction(Base):

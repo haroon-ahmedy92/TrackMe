@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.db.models import IncidentCaseState, LocationPrecision, RemoteActionKind, UserRole
+from app.db.models import GeofenceEventType, IncidentCaseState, LocationPrecision, RemoteActionKind, UserRole
 from app.schemas.common import Mode
 
 
@@ -175,14 +175,74 @@ class GeofenceCreateRequest(BaseModel):
     center_longitude: float
 
 
+class GeofenceUpdateRequest(BaseModel):
+    org_id: UUID
+    device_id: UUID | None = None
+    name: str = Field(min_length=2, max_length=120)
+    radius_meters: int = Field(ge=25, le=10000)
+    center_latitude: float
+    center_longitude: float
+    is_enabled: bool = True
+
+
 class GeofenceResponse(BaseModel):
     geofence_id: UUID
     org_id: UUID
     device_id: UUID | None
     name: str
+    center_latitude: float
+    center_longitude: float
     radius_meters: int
     is_enabled: bool
     created_at: datetime
+
+
+class LocationEventPointResponse(BaseModel):
+    event_id: UUID
+    device_id: UUID
+    captured_at: datetime
+    latitude: float | None
+    longitude: float | None
+    accuracy_meters: float | None
+    precision: LocationPrecision
+    confidence_score: int | None
+    source_methods: list[str] = Field(default_factory=list)
+    is_ip_approximate: bool
+    source_label: str
+
+
+class GeofenceEventResponse(BaseModel):
+    geofence_event_id: UUID
+    geofence_id: UUID
+    geofence_name: str | None = None
+    device_id: UUID
+    event_type: GeofenceEventType
+    precision: LocationPrecision
+    confidence_score: int | None
+    alert_emitted: bool
+    suppressed_reason: str | None
+    triggered_at: datetime
+
+
+class DeviceClusterResponse(BaseModel):
+    cluster_id: str
+    center_latitude: float
+    center_longitude: float
+    device_count: int
+    approximate_count: int
+    precise_count: int
+    moderate_count: int
+    latest_captured_at: datetime | None
+    device_ids: list[UUID] = Field(default_factory=list)
+
+
+class IncidentRouteResponse(BaseModel):
+    incident_id: UUID
+    device_id: UUID
+    started_at: datetime
+    ended_at: datetime
+    points: list[LocationEventPointResponse] = Field(default_factory=list)
+    geofence_events: list[GeofenceEventResponse] = Field(default_factory=list)
 
 
 class RemoteActionCreateRequest(BaseModel):
