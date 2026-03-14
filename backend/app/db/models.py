@@ -252,6 +252,16 @@ class GeofenceEventType(str, enum.Enum):
     EXIT = 'exit'
 
 
+class EvidenceExportFormat(str, enum.Enum):
+    JSON = 'json'
+    PDF = 'pdf'
+
+
+class EvidenceExportStatus(str, enum.Enum):
+    GENERATED = 'generated'
+    FAILED = 'failed'
+
+
 class Organization(Base):
     __tablename__ = 'orgs'
 
@@ -484,6 +494,9 @@ class Incident(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     events: Mapped[list['IncidentEvent']] = relationship(back_populates='incident')
+    notes: Mapped[list['IncidentNote']] = relationship(back_populates='incident')
+    attachments: Mapped[list['IncidentAttachment']] = relationship(back_populates='incident')
+    evidence_exports: Mapped[list['EvidenceExport']] = relationship(back_populates='incident')
 
 
 class IncidentEvent(Base):
@@ -502,6 +515,66 @@ class IncidentEvent(Base):
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     incident: Mapped['Incident'] = relationship(back_populates='events')
+
+
+class IncidentNote(Base):
+    __tablename__ = 'incident_notes'
+    __table_args__ = (
+        Index('ix_incident_notes_incident_updated', 'incident_id', 'updated_at'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('orgs.id'), nullable=False)
+    incident_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('incidents.id'), nullable=False)
+    author_sub: Mapped[str] = mapped_column(String(150), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    is_pinned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    incident: Mapped['Incident'] = relationship(back_populates='notes')
+
+
+class IncidentAttachment(Base):
+    __tablename__ = 'incident_attachments'
+    __table_args__ = (
+        Index('ix_incident_attachments_incident_created', 'incident_id', 'created_at'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('orgs.id'), nullable=False)
+    incident_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('incidents.id'), nullable=False)
+    uploaded_by_sub: Mapped[str] = mapped_column(String(150), nullable=False)
+    file_name: Mapped[str] = mapped_column(String(180), nullable=False)
+    media_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    description: Mapped[str | None] = mapped_column(String(280), nullable=True)
+    storage_key: Mapped[str | None] = mapped_column(String(220), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    incident: Mapped['Incident'] = relationship(back_populates='attachments')
+
+
+class EvidenceExport(Base):
+    __tablename__ = 'evidence_exports'
+    __table_args__ = (
+        Index('ix_evidence_exports_incident_created', 'incident_id', 'created_at'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('orgs.id'), nullable=False)
+    incident_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('incidents.id'), nullable=False)
+    requested_by_sub: Mapped[str] = mapped_column(String(150), nullable=False)
+    format: Mapped[EvidenceExportFormat] = mapped_column(Enum(EvidenceExportFormat), nullable=False)
+    status: Mapped[EvidenceExportStatus] = mapped_column(Enum(EvidenceExportStatus), nullable=False)
+    reason: Mapped[str] = mapped_column(String(280), nullable=False)
+    redact_fields_json: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    summary_json: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    incident: Mapped['Incident'] = relationship(back_populates='evidence_exports')
 
 
 class Geofence(Base):

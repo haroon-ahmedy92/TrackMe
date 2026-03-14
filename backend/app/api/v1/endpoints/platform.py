@@ -4,16 +4,19 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi.responses import FileResponse
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
     get_audit_log_service,
     get_auth_identity_service,
+    get_case_evidence_service,
     get_case_management_service,
     get_device_key_service,
     get_device_registry_service,
     get_enrollment_service,
+    get_evidence_export_bundle_service,
     get_geofence_service,
     get_ip_enrichment_service,
     get_location_ingestion_service,
@@ -29,6 +32,8 @@ from app.db.models import AuditLog, GeofenceEvent, Incident, LocationEvent
 from app.schemas.platform import (
     AuditLogResponse,
     AuditLogChainVerificationResponse,
+    CaseEvidenceChainResponse,
+    CaseEvidenceEntryResponse,
     DeviceClusterResponse,
     DeviceKeyRegisterRequest,
     DeviceKeyRotateRequest,
@@ -37,12 +42,20 @@ from app.schemas.platform import (
     DeviceResponse,
     EnrollmentCreateRequest,
     EnrollmentResponse,
+    IncidentAttachmentCreateRequest,
+    IncidentAttachmentResponse,
     GeofenceCreateRequest,
     GeofenceEventResponse,
     GeofenceResponse,
     GeofenceUpdateRequest,
     IncidentCreateRequest,
+    IncidentEvidenceExportRequest,
+    IncidentEvidenceExportResponse,
     IncidentEventResponse,
+    IncidentNoteCreateRequest,
+    IncidentNoteResponse,
+    IncidentNoteUpdateRequest,
+    IncidentRemoteActionEvidenceResponse,
     IncidentRouteResponse,
     IncidentResponse,
     IncidentTransitionRequest,
@@ -63,10 +76,12 @@ from app.schemas.platform import (
 )
 from app.services.audit_log_service import AuditLogService
 from app.services.auth_identity_service import AuthIdentityService
+from app.services.case_evidence_service import CaseEvidenceService
 from app.services.case_management_service import CaseManagementService
 from app.services.device_key_service import DeviceKeyService
 from app.services.device_registry_service import DeviceRegistryService
 from app.services.enrollment_service import EnrollmentService
+from app.services.evidence_export_bundle_service import EvidenceExportBundleService
 from app.services.geofence_service import GeofenceService
 from app.services.ip_enrichment_service import IpEnrichmentService
 from app.services.location_ingestion_service import LocationIngestionService
@@ -357,6 +372,18 @@ async def open_case(
     return _incident_response(incident)
 
 
+@router.get('/incidents', response_model=list[IncidentResponse])
+async def list_cases(
+    org_id: UUID = Query(...),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.OWNER, Role.AUDITOR)),
+    session: AsyncSession = Depends(get_db_session),
+    case_evidence_service: CaseEvidenceService = Depends(get_case_evidence_service),
+) -> list[IncidentResponse]:
+    _assert_org_access(principal, org_id)
+    incidents = await case_evidence_service.list_cases(session, org_id=org_id)
+    return [_incident_response(incident) for incident in incidents]
+
+
 @router.post('/cases/{incident_id}/confirm-stolen', response_model=IncidentResponse)
 async def case_confirm_stolen(
     incident_id: UUID,
@@ -495,6 +522,258 @@ async def case_events(
         )
         for e in events
     ]
+
+
+@router.get('/cases/{incident_id}/notes', response_model=list[IncidentNoteResponse])
+async def list_case_notes(
+    incident_id: UUID,
+    org_id: UUID = Query(...),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.OWNER, Role.AUDITOR)),
+    session: AsyncSession = Depends(get_db_session),
+    service: CaseManagementService = Depends(get_case_management_service),
+    case_evidence_service: CaseEvidenceService = Depends(get_case_evidence_service),
+) -> list[IncidentNoteResponse]:
+    incident = await service.get_case(session, incident_id)
+    _assert_org_access(principal, org_id)
+    if incident.org_id != org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Tenant access denied')
+    notes = await case_evidence_service.list_notes(session, incident_id=incident.id)
+    return [_incident_note_response(note) for note in notes]
+
+
+@router.post('/cases/{incident_id}/notes', response_model=IncidentNoteResponse)
+async def create_case_note(
+    incident_id: UUID,
+    payload: IncidentNoteCreateRequest,
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.OWNER)),
+    session: AsyncSession = Depends(get_db_session),
+    service: CaseManagementService = Depends(get_case_management_service),
+    case_evidence_service: CaseEvidenceService = Depends(get_case_evidence_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> IncidentNoteResponse:
+    incident = await service.get_case(session, incident_id)
+    _assert_org_access(principal, payload.org_id)
+    if incident.org_id != payload.org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Tenant access denied')
+    note = await case_evidence_service.create_note(session, incident=incident, payload=payload, actor_sub=principal.subject)
+    await audit_log_service.append(
+        session,
+        org_id=str(payload.org_id),
+        actor_sub=principal.subject,
+        action='CASE_NOTE_CREATED',
+        entity_type='incident_note',
+        entity_id=str(note.id),
+        metadata={'incident_id': str(incident.id), 'is_pinned': note.is_pinned},
+    )
+    await session.commit()
+    return _incident_note_response(note)
+
+
+@router.put('/cases/{incident_id}/notes/{note_id}', response_model=IncidentNoteResponse)
+async def update_case_note(
+    incident_id: UUID,
+    note_id: UUID,
+    payload: IncidentNoteUpdateRequest,
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.OWNER)),
+    session: AsyncSession = Depends(get_db_session),
+    service: CaseManagementService = Depends(get_case_management_service),
+    case_evidence_service: CaseEvidenceService = Depends(get_case_evidence_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> IncidentNoteResponse:
+    incident = await service.get_case(session, incident_id)
+    _assert_org_access(principal, payload.org_id)
+    if incident.org_id != payload.org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Tenant access denied')
+    note = await case_evidence_service.update_note(session, incident=incident, note_id=note_id, payload=payload)
+    await audit_log_service.append(
+        session,
+        org_id=str(payload.org_id),
+        actor_sub=principal.subject,
+        action='CASE_NOTE_UPDATED',
+        entity_type='incident_note',
+        entity_id=str(note.id),
+        metadata={'incident_id': str(incident.id), 'is_pinned': note.is_pinned},
+    )
+    await session.commit()
+    return _incident_note_response(note)
+
+
+@router.get('/cases/{incident_id}/attachments', response_model=list[IncidentAttachmentResponse])
+async def list_case_attachments(
+    incident_id: UUID,
+    org_id: UUID = Query(...),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.OWNER, Role.AUDITOR)),
+    session: AsyncSession = Depends(get_db_session),
+    service: CaseManagementService = Depends(get_case_management_service),
+    case_evidence_service: CaseEvidenceService = Depends(get_case_evidence_service),
+) -> list[IncidentAttachmentResponse]:
+    incident = await service.get_case(session, incident_id)
+    _assert_org_access(principal, org_id)
+    if incident.org_id != org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Tenant access denied')
+    attachments = await case_evidence_service.list_attachments(session, incident_id=incident.id)
+    return [_incident_attachment_response(attachment) for attachment in attachments]
+
+
+@router.post('/cases/{incident_id}/attachments', response_model=IncidentAttachmentResponse)
+async def create_case_attachment(
+    incident_id: UUID,
+    payload: IncidentAttachmentCreateRequest,
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY)),
+    session: AsyncSession = Depends(get_db_session),
+    service: CaseManagementService = Depends(get_case_management_service),
+    case_evidence_service: CaseEvidenceService = Depends(get_case_evidence_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> IncidentAttachmentResponse:
+    incident = await service.get_case(session, incident_id)
+    _assert_org_access(principal, payload.org_id)
+    if incident.org_id != payload.org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Tenant access denied')
+    attachment = await case_evidence_service.create_attachment(
+        session,
+        incident=incident,
+        payload=payload,
+        actor_sub=principal.subject,
+    )
+    await audit_log_service.append(
+        session,
+        org_id=str(payload.org_id),
+        actor_sub=principal.subject,
+        action='CASE_ATTACHMENT_ADDED',
+        entity_type='incident_attachment',
+        entity_id=str(attachment.id),
+        metadata={'incident_id': str(incident.id), 'file_name': attachment.file_name},
+    )
+    await session.commit()
+    return _incident_attachment_response(attachment)
+
+
+@router.get('/cases/{incident_id}/exports', response_model=list[IncidentEvidenceExportResponse])
+async def list_case_exports(
+    incident_id: UUID,
+    org_id: UUID = Query(...),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.AUDITOR)),
+    session: AsyncSession = Depends(get_db_session),
+    service: CaseManagementService = Depends(get_case_management_service),
+    case_evidence_service: CaseEvidenceService = Depends(get_case_evidence_service),
+    bundle_service: EvidenceExportBundleService = Depends(get_evidence_export_bundle_service),
+) -> list[IncidentEvidenceExportResponse]:
+    incident = await service.get_case(session, incident_id)
+    _assert_org_access(principal, org_id)
+    if incident.org_id != org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Tenant access denied')
+    exports = await case_evidence_service.list_exports(session, incident_id=incident.id)
+    return [_incident_export_response(export, bundle_service=bundle_service) for export in exports]
+
+
+@router.post('/cases/{incident_id}/exports', response_model=IncidentEvidenceExportResponse)
+async def create_case_export(
+    incident_id: UUID,
+    payload: IncidentEvidenceExportRequest,
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.AUDITOR)),
+    session: AsyncSession = Depends(get_db_session),
+    service: CaseManagementService = Depends(get_case_management_service),
+    case_evidence_service: CaseEvidenceService = Depends(get_case_evidence_service),
+    bundle_service: EvidenceExportBundleService = Depends(get_evidence_export_bundle_service),
+    spatial_service: SpatialService = Depends(get_spatial_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> IncidentEvidenceExportResponse:
+    incident = await service.get_case(session, incident_id)
+    _assert_org_access(principal, payload.org_id)
+    if incident.org_id != payload.org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Tenant access denied')
+    export = await case_evidence_service.create_export(
+        session,
+        incident=incident,
+        payload=payload,
+        actor_sub=principal.subject,
+        spatial_service=spatial_service,
+        bundle_service=bundle_service,
+    )
+    await audit_log_service.append(
+        session,
+        org_id=str(payload.org_id),
+        actor_sub=principal.subject,
+        action='CASE_EVIDENCE_EXPORT_CREATED',
+        entity_type='evidence_export',
+        entity_id=str(export.id),
+        metadata={'incident_id': str(incident.id), 'format': export.format.value, 'redact_fields': payload.redact_fields},
+    )
+    await session.commit()
+    return _incident_export_response(export, bundle_service=bundle_service)
+
+
+@router.get('/cases/{incident_id}/exports/{export_id}/download')
+async def download_case_export(
+    incident_id: UUID,
+    export_id: UUID,
+    org_id: UUID = Query(...),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.OWNER, Role.AUDITOR)),
+    session: AsyncSession = Depends(get_db_session),
+    service: CaseManagementService = Depends(get_case_management_service),
+    case_evidence_service: CaseEvidenceService = Depends(get_case_evidence_service),
+    bundle_service: EvidenceExportBundleService = Depends(get_evidence_export_bundle_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> FileResponse:
+    incident = await service.get_case(session, incident_id)
+    _assert_org_access(principal, org_id)
+    if incident.org_id != org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Tenant access denied')
+    export = next(
+        (item for item in await case_evidence_service.list_exports(session, incident_id=incident.id) if item.id == export_id),
+        None,
+    )
+    if export is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Unknown export_id')
+    bundle_path = bundle_service.bundle_path(org_id=incident.org_id, incident_id=incident.id, export_id=export.id)
+    if not bundle_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Export bundle not generated')
+    await audit_log_service.append(
+        session,
+        org_id=str(org_id),
+        actor_sub=principal.subject,
+        action='CASE_EVIDENCE_EXPORT_DOWNLOADED',
+        entity_type='evidence_export',
+        entity_id=str(export.id),
+        metadata={'incident_id': str(incident.id), 'bundle_name': bundle_path.name},
+    )
+    await session.commit()
+    return FileResponse(
+        path=bundle_path,
+        media_type='application/zip',
+        filename=bundle_path.name,
+    )
+
+
+@router.get('/cases/{incident_id}/evidence-chain', response_model=CaseEvidenceChainResponse)
+async def case_evidence_chain(
+    incident_id: UUID,
+    org_id: UUID = Query(...),
+    redact_fields: list[str] = Query(default=[]),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.OWNER, Role.AUDITOR)),
+    session: AsyncSession = Depends(get_db_session),
+    service: CaseManagementService = Depends(get_case_management_service),
+    case_evidence_service: CaseEvidenceService = Depends(get_case_evidence_service),
+    spatial_service: SpatialService = Depends(get_spatial_service),
+) -> CaseEvidenceChainResponse:
+    incident = await service.get_case(session, incident_id)
+    _assert_org_access(principal, org_id)
+    if incident.org_id != org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Tenant access denied')
+    chain = await case_evidence_service.build_chain(
+        session,
+        incident=incident,
+        redact_fields=redact_fields,
+        spatial_service=spatial_service,
+    )
+    return CaseEvidenceChainResponse(
+        incident=IncidentResponse.model_validate(chain['incident']),
+        actions_taken=[IncidentRemoteActionEvidenceResponse.model_validate(action) for action in chain['actions_taken']],
+        notes=[IncidentNoteResponse.model_validate(note) for note in chain['notes']],
+        attachments=[IncidentAttachmentResponse.model_validate(attachment) for attachment in chain['attachments']],
+        exports=[IncidentEvidenceExportResponse.model_validate(export) for export in chain['exports']],
+        entries=[CaseEvidenceEntryResponse.model_validate(entry) for entry in chain['entries']],
+    )
 
 
 @router.post('/remote-actions', response_model=RemoteActionResponse)
@@ -937,4 +1216,51 @@ def _geofence_event_out(event: GeofenceEvent, geofence_name: str | None = None) 
         alert_emitted=event.alert_emitted,
         suppressed_reason=event.suppressed_reason,
         triggered_at=event.triggered_at,
+    )
+
+
+def _incident_note_response(note) -> IncidentNoteResponse:
+    return IncidentNoteResponse(
+        note_id=note.id,
+        incident_id=note.incident_id,
+        author_sub=note.author_sub,
+        body=note.body,
+        is_pinned=note.is_pinned,
+        created_at=note.created_at,
+        updated_at=note.updated_at,
+    )
+
+
+def _incident_attachment_response(attachment) -> IncidentAttachmentResponse:
+    return IncidentAttachmentResponse(
+        attachment_id=attachment.id,
+        incident_id=attachment.incident_id,
+        uploaded_by_sub=attachment.uploaded_by_sub,
+        file_name=attachment.file_name,
+        media_type=attachment.media_type,
+        byte_size=attachment.byte_size,
+        sha256=attachment.sha256,
+        description=attachment.description,
+        storage_key=attachment.storage_key,
+        created_at=attachment.created_at,
+    )
+
+
+def _incident_export_response(export, *, bundle_service: EvidenceExportBundleService) -> IncidentEvidenceExportResponse:
+    return IncidentEvidenceExportResponse(
+        export_id=export.id,
+        incident_id=export.incident_id,
+        requested_by_sub=export.requested_by_sub,
+        format=export.format,
+        status=export.status,
+        reason=export.reason,
+        redact_fields=list(export.redact_fields_json.get('fields', [])),
+        summary=export.summary_json,
+        download_placeholder=bundle_service.download_url(
+            incident_id=export.incident_id,
+            export_id=export.id,
+            org_id=export.org_id,
+        ),
+        created_at=export.created_at,
+        generated_at=export.generated_at,
     )

@@ -5,7 +5,16 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.db.models import GeofenceEventType, IncidentCaseState, LocationPrecision, RemoteActionKind, UserRole
+from app.db.models import (
+    EvidenceExportFormat,
+    EvidenceExportStatus,
+    GeofenceEventType,
+    IncidentCaseState,
+    LocationPrecision,
+    RemoteActionKind,
+    RemoteActionState,
+    UserRole,
+)
 from app.schemas.common import Mode
 
 
@@ -156,6 +165,72 @@ class IncidentResponse(BaseModel):
     updated_at: datetime
 
 
+class IncidentNoteCreateRequest(BaseModel):
+    org_id: UUID
+    body: str = Field(min_length=2, max_length=4000)
+    is_pinned: bool = False
+
+
+class IncidentNoteUpdateRequest(BaseModel):
+    org_id: UUID
+    body: str = Field(min_length=2, max_length=4000)
+    is_pinned: bool = False
+
+
+class IncidentNoteResponse(BaseModel):
+    note_id: UUID
+    incident_id: UUID
+    author_sub: str
+    body: str
+    is_pinned: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class IncidentAttachmentCreateRequest(BaseModel):
+    org_id: UUID
+    file_name: str = Field(min_length=1, max_length=180)
+    media_type: str = Field(min_length=3, max_length=120)
+    byte_size: int = Field(ge=1)
+    sha256: str | None = Field(default=None, min_length=16, max_length=128)
+    description: str | None = Field(default=None, max_length=280)
+    storage_key: str | None = Field(default=None, max_length=220)
+
+
+class IncidentAttachmentResponse(BaseModel):
+    attachment_id: UUID
+    incident_id: UUID
+    uploaded_by_sub: str
+    file_name: str
+    media_type: str
+    byte_size: int
+    sha256: str | None
+    description: str | None
+    storage_key: str | None
+    created_at: datetime
+
+
+class IncidentEvidenceExportRequest(BaseModel):
+    org_id: UUID
+    format: EvidenceExportFormat
+    reason: str = Field(min_length=2, max_length=280)
+    redact_fields: list[str] = Field(default_factory=list)
+
+
+class IncidentEvidenceExportResponse(BaseModel):
+    export_id: UUID
+    incident_id: UUID
+    requested_by_sub: str
+    format: EvidenceExportFormat
+    status: EvidenceExportStatus
+    reason: str
+    redact_fields: list[str] = Field(default_factory=list)
+    summary: dict = Field(default_factory=dict)
+    download_placeholder: str | None = None
+    created_at: datetime
+    generated_at: datetime | None
+
+
 class IncidentEventResponse(BaseModel):
     incident_event_id: UUID
     incident_id: UUID
@@ -243,6 +318,40 @@ class IncidentRouteResponse(BaseModel):
     ended_at: datetime
     points: list[LocationEventPointResponse] = Field(default_factory=list)
     geofence_events: list[GeofenceEventResponse] = Field(default_factory=list)
+
+
+class IncidentRemoteActionEvidenceResponse(BaseModel):
+    remote_action_id: UUID
+    action_kind: RemoteActionKind
+    state: RemoteActionState
+    reason: str
+    requested_by_sub: str
+    requested_at: datetime
+    sent_at: datetime | None = None
+    delivered_at: datetime | None = None
+    acked_at: datetime | None = None
+    failed_at: datetime | None = None
+    last_error: str | None = None
+
+
+class CaseEvidenceEntryResponse(BaseModel):
+    entry_id: str
+    kind: str
+    title: str
+    summary: str
+    occurred_at: datetime
+    actor_sub: str | None = None
+    mutable: bool = False
+    data: dict = Field(default_factory=dict)
+
+
+class CaseEvidenceChainResponse(BaseModel):
+    incident: IncidentResponse
+    actions_taken: list[IncidentRemoteActionEvidenceResponse] = Field(default_factory=list)
+    notes: list[IncidentNoteResponse] = Field(default_factory=list)
+    attachments: list[IncidentAttachmentResponse] = Field(default_factory=list)
+    exports: list[IncidentEvidenceExportResponse] = Field(default_factory=list)
+    entries: list[CaseEvidenceEntryResponse] = Field(default_factory=list)
 
 
 class RemoteActionCreateRequest(BaseModel):

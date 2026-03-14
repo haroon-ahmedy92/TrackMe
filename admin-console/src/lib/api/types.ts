@@ -1,7 +1,11 @@
 import type {
   AuditLogRecord,
+  CaseAttachmentRecord,
+  CaseEvidenceChainRecord,
+  CaseNoteRecord,
   DeviceClusterRecord,
   DeviceRecord,
+  EvidenceExportRecord,
   GeofenceRecord,
   GeofenceEventRecord,
   IncidentRecord,
@@ -25,6 +29,17 @@ export interface ApiClient {
   getIncidents(): Promise<IncidentRecord[]>;
   getIncidentTimeline(incidentId: string): Promise<IncidentTimelineEvent[]>;
   getIncidentRoute(incidentId: string, windowHours?: number): Promise<IncidentRouteRecord>;
+  getCaseEvidenceChain(incidentId: string, redactFields?: string[]): Promise<CaseEvidenceChainRecord>;
+  addCaseNote(incidentId: string, payload: { body: string; pinned?: boolean }): Promise<CaseNoteRecord>;
+  updateCaseNote(incidentId: string, noteId: string, payload: { body: string; pinned?: boolean }): Promise<CaseNoteRecord>;
+  addCaseAttachment(
+    incidentId: string,
+    payload: { fileName: string; mediaType: string; byteSize: number; sha256?: string; description?: string },
+  ): Promise<CaseAttachmentRecord>;
+  requestEvidenceExport(
+    incidentId: string,
+    payload: { format: 'json' | 'pdf'; reason: string; redactFields: string[] },
+  ): Promise<EvidenceExportRecord>;
   markDeviceLost(deviceId: string, reason: string): Promise<void>;
   confirmDeviceStolen(incidentId: string, reason: string): Promise<void>;
   recoverIncident(incidentId: string, reason: string): Promise<void>;

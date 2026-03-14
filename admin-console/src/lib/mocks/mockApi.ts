@@ -2,8 +2,12 @@ import { ApiError } from '@/lib/api/errors';
 import type { ApiClient } from '@/lib/api/types';
 import {
   mockAuditLogs,
+  mockCaseAttachments,
+  mockCaseEvidenceChains,
+  mockCaseNotes,
   mockDeviceClusters,
   mockDevices,
+  mockEvidenceExports,
   mockGeofences,
   mockGeofenceEvents,
   mockIncidentTimeline,
@@ -14,9 +18,13 @@ import {
   mockSettings,
 } from '@/lib/mocks/data';
 import type {
+  CaseAttachmentRecord,
+  CaseEvidenceChainRecord,
+  CaseNoteRecord,
   DeviceClusterRecord,
   GeofenceRecord,
   GeofenceEventRecord,
+  EvidenceExportRecord,
   IncidentRecord,
   IncidentRouteRecord,
   LoginRequest,
@@ -45,6 +53,10 @@ let locationHistory = clone(mockLocationHistory);
 let geofenceEvents = clone(mockGeofenceEvents);
 let incidentRoutes = clone(mockIncidentRoutes);
 let deviceClusters = clone(mockDeviceClusters);
+let caseNotes = clone(mockCaseNotes);
+let caseAttachments = clone(mockCaseAttachments);
+let evidenceExports = clone(mockEvidenceExports);
+let caseEvidenceChains = clone(mockCaseEvidenceChains);
 
 const appendAudit = (entry: {
   action: string;
@@ -136,6 +148,127 @@ export const mockApiClient: ApiClient = {
       throw new ApiError('Incident route not found', 404);
     }
     return clone(route);
+  },
+
+  async getCaseEvidenceChain(incidentId: string): Promise<CaseEvidenceChainRecord> {
+    await wait();
+    const chain = caseEvidenceChains[incidentId];
+    if (!chain) {
+      throw new ApiError('Evidence chain not found', 404);
+    }
+    return clone(chain);
+  },
+
+  async addCaseNote(incidentId: string, payload: { body: string; pinned?: boolean }): Promise<CaseNoteRecord> {
+    await wait();
+    const note: CaseNoteRecord = {
+      id: `note-${Date.now()}`,
+      incidentId,
+      author: 'web.admin@local',
+      body: payload.body,
+      pinned: Boolean(payload.pinned),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    caseNotes[incidentId] = [note, ...(caseNotes[incidentId] ?? [])];
+    caseEvidenceChains[incidentId] = {
+      ...caseEvidenceChains[incidentId],
+      notes: caseNotes[incidentId],
+      entries: [
+        {
+          id: `entry-note-${Date.now()}`,
+          kind: 'note',
+          title: 'Analyst note',
+          summary: payload.body,
+          occurredAt: note.updatedAt,
+          actor: note.author,
+          mutable: true,
+          data: { pinned: note.pinned },
+        },
+        ...(caseEvidenceChains[incidentId]?.entries ?? []),
+      ],
+    };
+    appendAudit({ action: 'CASE_NOTE_CREATED', targetType: 'incident_note', targetId: note.id, reason: payload.body });
+    return clone(note);
+  },
+
+  async updateCaseNote(incidentId: string, noteId: string, payload: { body: string; pinned?: boolean }): Promise<CaseNoteRecord> {
+    await wait();
+    const note = (caseNotes[incidentId] ?? []).find((item) => item.id === noteId);
+    if (!note) {
+      throw new ApiError('Note not found', 404);
+    }
+    note.body = payload.body;
+    note.pinned = Boolean(payload.pinned);
+    note.updatedAt = new Date().toISOString();
+    appendAudit({ action: 'CASE_NOTE_UPDATED', targetType: 'incident_note', targetId: noteId, reason: payload.body });
+    return clone(note);
+  },
+
+  async addCaseAttachment(
+    incidentId: string,
+    payload: { fileName: string; mediaType: string; byteSize: number; sha256?: string; description?: string },
+  ): Promise<CaseAttachmentRecord> {
+    await wait();
+    const attachment: CaseAttachmentRecord = {
+      id: `attachment-${Date.now()}`,
+      incidentId,
+      uploadedBy: 'web.admin@local',
+      fileName: payload.fileName,
+      mediaType: payload.mediaType,
+      byteSize: payload.byteSize,
+      sha256: payload.sha256,
+      description: payload.description,
+      storageKey: `placeholder://incident/${incidentId}/${payload.fileName}`,
+      createdAt: new Date().toISOString(),
+    };
+    caseAttachments[incidentId] = [attachment, ...(caseAttachments[incidentId] ?? [])];
+    caseEvidenceChains[incidentId] = {
+      ...caseEvidenceChains[incidentId],
+      attachments: caseAttachments[incidentId],
+      entries: [
+        {
+          id: `entry-attachment-${Date.now()}`,
+          kind: 'attachment',
+          title: payload.fileName,
+          summary: payload.description ?? payload.mediaType,
+          occurredAt: attachment.createdAt,
+          actor: attachment.uploadedBy,
+          mutable: false,
+          data: { mediaType: payload.mediaType, byteSize: payload.byteSize },
+        },
+        ...(caseEvidenceChains[incidentId]?.entries ?? []),
+      ],
+    };
+    appendAudit({ action: 'CASE_ATTACHMENT_ADDED', targetType: 'incident_attachment', targetId: attachment.id, reason: payload.description ?? payload.fileName });
+    return clone(attachment);
+  },
+
+  async requestEvidenceExport(
+    incidentId: string,
+    payload: { format: 'json' | 'pdf'; reason: string; redactFields: string[] },
+  ): Promise<EvidenceExportRecord> {
+    await wait();
+    const record: EvidenceExportRecord = {
+      id: `export-${Date.now()}`,
+      incidentId,
+      requestedBy: 'web.admin@local',
+      format: payload.format,
+      status: 'generated',
+      reason: payload.reason,
+      redactFields: payload.redactFields,
+      summary: { placeholder: true, format: payload.format },
+      downloadPlaceholder: `placeholder://exports/${incidentId}.${payload.format}`,
+      createdAt: new Date().toISOString(),
+      generatedAt: new Date().toISOString(),
+    };
+    evidenceExports[incidentId] = [record, ...(evidenceExports[incidentId] ?? [])];
+    caseEvidenceChains[incidentId] = {
+      ...caseEvidenceChains[incidentId],
+      exports: evidenceExports[incidentId],
+    };
+    appendAudit({ action: 'CASE_EVIDENCE_EXPORT_CREATED', targetType: 'evidence_export', targetId: record.id, reason: payload.reason });
+    return clone(record);
   },
 
   async markDeviceLost(deviceId: string, reason: string) {

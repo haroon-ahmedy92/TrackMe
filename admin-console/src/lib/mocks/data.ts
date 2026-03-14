@@ -1,7 +1,13 @@
 import type {
   AuditLogRecord,
+  CaseActionRecord,
+  CaseAttachmentRecord,
+  CaseEvidenceChainRecord,
+  CaseEvidenceEntryRecord,
+  CaseNoteRecord,
   DeviceClusterRecord,
   DeviceRecord,
+  EvidenceExportRecord,
   GeofenceRecord,
   GeofenceEventRecord,
   IncidentRecord,
@@ -361,6 +367,161 @@ export const mockIncidentRoutes: Record<string, IncidentRouteRecord> = {
     endedAt: '2026-03-10T07:00:00Z',
     points: mockLocationHistory['dev-002'],
     geofenceEvents: mockGeofenceEvents.filter((event) => event.deviceId === 'dev-002'),
+  },
+};
+
+export const mockCaseNotes: Record<string, CaseNoteRecord[]> = {
+  'inc-102': [
+    {
+      id: 'note-1',
+      incidentId: 'inc-102',
+      author: 'security.lead@org.tz',
+      body: 'Spoke with depot supervisor. Device was last checked out at shift handover and not returned.',
+      pinned: true,
+      createdAt: '2026-03-10T07:10:00Z',
+      updatedAt: '2026-03-10T07:10:00Z',
+    },
+    {
+      id: 'note-2',
+      incidentId: 'inc-102',
+      author: 'ops.admin@org.tz',
+      body: 'Recovery message approved for display if the device comes online.',
+      pinned: false,
+      createdAt: '2026-03-10T07:25:00Z',
+      updatedAt: '2026-03-10T07:25:00Z',
+    },
+  ],
+};
+
+export const mockCaseAttachments: Record<string, CaseAttachmentRecord[]> = {
+  'inc-102': [
+    {
+      id: 'attachment-1',
+      incidentId: 'inc-102',
+      uploadedBy: 'ops.admin@org.tz',
+      fileName: 'handover-form.pdf',
+      mediaType: 'application/pdf',
+      byteSize: 182440,
+      sha256: 'abcdef1234567890abcdef1234567890',
+      description: 'Signed handover register scanned after incident opening.',
+      storageKey: 'placeholder://incident/inc-102/handover-form.pdf',
+      createdAt: '2026-03-10T07:15:00Z',
+    },
+  ],
+};
+
+export const mockEvidenceExports: Record<string, EvidenceExportRecord[]> = {
+  'inc-102': [
+    {
+      id: 'export-1',
+      incidentId: 'inc-102',
+      requestedBy: 'auditor@org.tz',
+      format: 'json',
+      status: 'generated',
+      reason: 'Share with incident review team',
+      redactFields: ['latitude', 'longitude'],
+      summary: { placeholder: true, entryCount: 7 },
+      downloadPlaceholder: 'placeholder://exports/inc-102-summary.json',
+      createdAt: '2026-03-10T07:40:00Z',
+      generatedAt: '2026-03-10T07:40:02Z',
+    },
+  ],
+};
+
+export const mockCaseEvidenceEntries: Record<string, CaseEvidenceEntryRecord[]> = {
+  'inc-102': [
+    {
+      id: 'entry-1',
+      kind: 'incident_event',
+      title: 'Case Opened',
+      summary: 'Case opened as suspected lost after shift handover check failed.',
+      occurredAt: '2026-03-09T21:55:00Z',
+      actor: 'ops.admin@org.tz',
+      mutable: false,
+      data: { ticketReference: 'CASE-102' },
+    },
+    {
+      id: 'entry-2',
+      kind: 'location',
+      title: 'Last Known Location',
+      summary: 'Last known fused location + network context',
+      occurredAt: '2026-03-09T22:05:00Z',
+      actor: null,
+      mutable: false,
+      data: { precision: 'moderate', confidence: 58, latitude: -3.3869, longitude: 36.683 },
+    },
+    {
+      id: 'entry-3',
+      kind: 'geofence',
+      title: 'Geofence Exit',
+      summary: 'Arusha Depot exit alert emitted',
+      occurredAt: '2026-03-09T22:05:00Z',
+      actor: null,
+      mutable: false,
+      data: { geofenceName: 'Arusha Depot', alertEmitted: true },
+    },
+    {
+      id: 'entry-4',
+      kind: 'remote_action',
+      title: 'Lock Command',
+      summary: 'Pending command attempt for device lock',
+      occurredAt: '2026-03-10T06:45:00Z',
+      actor: 'ops.admin@org.tz',
+      mutable: false,
+      data: { state: 'PENDING', reason: 'Protect data' },
+    },
+    {
+      id: 'entry-5',
+      kind: 'attachment',
+      title: 'handover-form.pdf',
+      summary: 'Signed handover register scanned after incident opening.',
+      occurredAt: '2026-03-10T07:15:00Z',
+      actor: 'ops.admin@org.tz',
+      mutable: false,
+      data: { mediaType: 'application/pdf', byteSize: 182440 },
+    },
+    {
+      id: 'entry-6',
+      kind: 'note',
+      title: 'Analyst note',
+      summary: 'Spoke with depot supervisor. Device was last checked out at shift handover and not returned.',
+      occurredAt: '2026-03-10T07:10:00Z',
+      actor: 'security.lead@org.tz',
+      mutable: true,
+      data: { pinned: true },
+    },
+  ],
+};
+
+export const mockCaseEvidenceChains: Record<string, CaseEvidenceChainRecord> = {
+  'inc-102': {
+    incidentId: 'inc-102',
+    incidentState: 'SUSPECTED_LOST',
+    ticketReference: 'CASE-102',
+    recoveryMessage: 'Please return this device to the regional operations team.',
+    actionsTaken: [
+      {
+        id: 'case-action-1',
+        actionKind: 'lock',
+        state: 'pending',
+        reason: 'Protect data',
+        requestedBy: 'ops.admin@org.tz',
+        requestedAt: '2026-03-10T06:45:00Z',
+      },
+      {
+        id: 'case-action-2',
+        actionKind: 'display_recovery_message',
+        state: 'delivered',
+        reason: 'Show return instructions',
+        requestedBy: 'security.lead@org.tz',
+        requestedAt: '2026-03-09T22:03:00Z',
+        deliveredAt: '2026-03-09T22:04:00Z',
+      },
+    ] satisfies CaseActionRecord[],
+    notes: mockCaseNotes['inc-102'],
+    attachments: mockCaseAttachments['inc-102'],
+    exports: mockEvidenceExports['inc-102'],
+    entries: mockCaseEvidenceEntries['inc-102'],
   },
 };
 

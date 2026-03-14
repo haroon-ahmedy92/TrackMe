@@ -81,6 +81,54 @@ export interface IncidentTimelineEvent {
   details?: string;
 }
 
+export interface CaseNoteRecord {
+  id: string;
+  incidentId: string;
+  author: string;
+  body: string;
+  pinned: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CaseAttachmentRecord {
+  id: string;
+  incidentId: string;
+  uploadedBy: string;
+  fileName: string;
+  mediaType: string;
+  byteSize: number;
+  sha256?: string;
+  description?: string;
+  storageKey?: string;
+  createdAt: string;
+}
+
+export interface EvidenceExportRecord {
+  id: string;
+  incidentId: string;
+  requestedBy: string;
+  format: 'json' | 'pdf';
+  status: 'generated' | 'failed';
+  reason: string;
+  redactFields: string[];
+  summary: Record<string, string | number | boolean | null>;
+  downloadPlaceholder?: string;
+  createdAt: string;
+  generatedAt?: string;
+}
+
+export interface CaseEvidenceEntryRecord {
+  id: string;
+  kind: 'incident_event' | 'location' | 'geofence' | 'remote_action' | 'attachment' | 'note' | 'audit';
+  title: string;
+  summary: string;
+  occurredAt: string;
+  actor?: string | null;
+  mutable: boolean;
+  data: Record<string, string | number | boolean | null>;
+}
+
 export interface GeofenceRecord {
   id: string;
   name: string;
@@ -125,6 +173,32 @@ export interface IncidentRouteRecord {
   endedAt: string;
   points: LocationHistoryPoint[];
   geofenceEvents: GeofenceEventRecord[];
+}
+
+export interface CaseActionRecord {
+  id: string;
+  actionKind: 'enter_lost_mode' | 'display_recovery_message' | 'lock' | 'wipe';
+  state: 'pending' | 'sent' | 'delivered' | 'acked' | 'failed' | 'expired';
+  reason: string;
+  requestedBy: string;
+  requestedAt: string;
+  sentAt?: string;
+  deliveredAt?: string;
+  ackedAt?: string;
+  failedAt?: string;
+  lastError?: string;
+}
+
+export interface CaseEvidenceChainRecord {
+  incidentId: string;
+  incidentState: IncidentState;
+  ticketReference: string;
+  recoveryMessage?: string | null;
+  actionsTaken: CaseActionRecord[];
+  notes: CaseNoteRecord[];
+  attachments: CaseAttachmentRecord[];
+  exports: EvidenceExportRecord[];
+  entries: CaseEvidenceEntryRecord[];
 }
 
 export interface AuditLogRecord {

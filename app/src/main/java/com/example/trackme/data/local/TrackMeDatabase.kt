@@ -12,6 +12,9 @@ import com.example.trackme.data.local.entity.AuditEventEntity
 import com.example.trackme.data.local.entity.DeviceCommandEntity
 import com.example.trackme.data.local.entity.DeviceStateEntity
 import com.example.trackme.data.local.entity.EnrollmentEntity
+import com.example.trackme.data.local.entity.IncidentAttachmentReferenceEntity
+import com.example.trackme.data.local.entity.IncidentEvidenceExportEntity
+import com.example.trackme.data.local.entity.IncidentNoteEntity
 import com.example.trackme.data.local.entity.IncidentStateEntity
 import com.example.trackme.data.local.entity.IncidentTimelineEntity
 import com.example.trackme.data.local.entity.LocationSampleEntity
@@ -24,9 +27,12 @@ import com.example.trackme.data.local.entity.LocationSampleEntity
         LocationSampleEntity::class,
         AuditEventEntity::class,
         IncidentStateEntity::class,
-        IncidentTimelineEntity::class
+        IncidentTimelineEntity::class,
+        IncidentNoteEntity::class,
+        IncidentAttachmentReferenceEntity::class,
+        IncidentEvidenceExportEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class TrackMeDatabase : RoomDatabase() {

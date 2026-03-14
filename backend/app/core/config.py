@@ -35,6 +35,7 @@ class Settings(BaseModel):
     geofence_alert_cooldown_seconds: int = 1800
     spatial_default_history_hours: int = 24
     spatial_max_history_hours: int = 168
+    exports_storage_dir: str = 'backend/generated_exports'
 
 
 settings = Settings()
@@ -72,3 +73,4 @@ settings.spatial_default_history_hours = int(
 settings.spatial_max_history_hours = int(
     os.getenv('SPATIAL_MAX_HISTORY_HOURS', settings.spatial_max_history_hours)
 )
+settings.exports_storage_dir = os.getenv('EXPORTS_STORAGE_DIR', settings.exports_storage_dir)

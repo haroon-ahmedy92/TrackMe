@@ -24,8 +24,10 @@ import com.example.trackme.feature.common.InfoCallout
 import com.example.trackme.feature.common.ManagedStateBanner
 import com.example.trackme.feature.common.MetricRow
 import com.example.trackme.feature.common.SectionCard
+import com.example.trackme.feature.common.SectionDivider
 import com.example.trackme.feature.common.StatusChip
 import com.example.trackme.feature.common.TrackMeScreen
+import com.example.trackme.domain.model.IncidentEvidenceExportFormat
 import com.example.trackme.ui.common.formatEpochMillis
 
 @Composable
@@ -75,6 +77,23 @@ fun IncidentsScreen(
                         label = "Scheduled wipe",
                         value = formatEpochMillis(content.wipeScheduledAtEpochMs)
                     )
+                    content.lastKnownLocation?.let { lastLocation ->
+                        MetricRow(
+                            label = "Last known location",
+                            value = "${lastLocation.methodLabel} • ${lastLocation.confidenceScore}/100"
+                        )
+                        MetricRow(
+                            label = "Location precision",
+                            value = if (lastLocation.isApproximate) "Approximate" else lastLocation.precision.name
+                        )
+                        MetricRow(
+                            label = "Location timestamp",
+                            value = formatEpochMillis(lastLocation.capturedAtEpochMs)
+                        )
+                        lastLocation.geofenceTransition?.let { transition ->
+                            MetricRow(label = "Geofence alert", value = transition.replaceFirstChar { it.uppercase() })
+                        }
+                    }
                     content.statusMessage?.let {
                         Text(text = it, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -194,22 +213,190 @@ fun IncidentsScreen(
                 InfoCallout(text = stringResource(id = R.string.remote_action_policy_note))
 
                 SectionCard(
-                    title = stringResource(id = R.string.evidence_timeline_label),
-                    eyebrow = "Audit-backed history"
+                    title = "Case notes",
+                    eyebrow = "Editable analyst notes"
                 ) {
-                    if (content.timeline.isEmpty()) {
+                    OutlinedTextField(
+                        value = content.noteDraft,
+                        onValueChange = viewModel::onNoteDraftChanged,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Note for this case") }
+                    )
+                    RowCheckbox(
+                        checked = content.notePinned,
+                        onCheckedChange = viewModel::onNotePinnedChanged,
+                        label = "Pin note to top of case view"
+                    )
+                    Button(
+                        onClick = viewModel::addCaseNote,
+                        enabled = !content.inProgress,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Save case note")
+                    }
+                    if (content.notes.isEmpty()) {
                         Text(
-                            text = "No incident events yet.",
+                            text = "No analyst notes yet. Notes stay separate from the immutable audit log.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
-                        content.timeline.forEach { event ->
+                        content.notes.forEach { note ->
                             SectionCard(
                                 modifier = Modifier.fillMaxWidth(),
-                                title = "${event.action} (${event.state.name})",
-                                eyebrow = formatEpochMillis(event.createdAtEpochMs)
+                                title = if (note.isPinned) "Pinned note" else "Analyst note",
+                                eyebrow = formatEpochMillis(note.updatedAtEpochMs)
                             ) {
-                                Text(text = event.summary)
+                                Text(text = note.body)
+                                Text(
+                                    text = "Author: ${note.authorLabel}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+
+                SectionCard(
+                    title = "Attachments and export",
+                    eyebrow = "Case package support"
+                ) {
+                    InfoCallout(
+                        text = "Android records attachment references and export placeholders. Full evidence packages are assembled on the backend or web console."
+                    )
+                    OutlinedTextField(
+                        value = content.attachmentNameDraft,
+                        onValueChange = viewModel::onAttachmentNameDraftChanged,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Attachment name") }
+                    )
+                    OutlinedTextField(
+                        value = content.attachmentDescriptionDraft,
+                        onValueChange = viewModel::onAttachmentDescriptionDraftChanged,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Attachment note") }
+                    )
+                    Button(
+                        onClick = viewModel::addAttachmentReference,
+                        enabled = !content.inProgress,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Record attachment reference")
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Button(
+                            onClick = { viewModel.requestEvidenceExport(IncidentEvidenceExportFormat.JSON) },
+                            enabled = !content.inProgress,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("JSON export")
+                        }
+                        OutlinedButton(
+                            onClick = { viewModel.requestEvidenceExport(IncidentEvidenceExportFormat.PDF) },
+                            enabled = !content.inProgress,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("PDF export")
+                        }
+                    }
+                    if (content.attachments.isNotEmpty()) {
+                        SectionDivider()
+                        content.attachments.forEach { attachment ->
+                            MetricRow(
+                                label = attachment.fileName,
+                                value = formatEpochMillis(attachment.createdAtEpochMs)
+                            )
+                            attachment.description?.let {
+                                Text(
+                                    text = it,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                    if (content.evidenceExports.isNotEmpty()) {
+                        SectionDivider()
+                        content.evidenceExports.forEach { export ->
+                            MetricRow(
+                                label = "${export.format.name} export placeholder",
+                                value = formatEpochMillis(export.createdAtEpochMs)
+                            )
+                            Text(
+                                text = export.redactionSummary,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                SectionCard(
+                    title = "Actions taken during recovery",
+                    eyebrow = "Commands and decisions"
+                ) {
+                    if (content.actionsTaken.isEmpty()) {
+                        Text(
+                            text = "No remote command attempts recorded yet.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        content.actionsTaken.forEach { action ->
+                            SectionCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                title = action.type.name.replace('_', ' '),
+                                eyebrow = formatEpochMillis(action.executedAtEpochMs ?: action.requestedAtEpochMs)
+                            ) {
+                                Text(text = "${action.status.name} • ${action.reason}")
+                                Text(
+                                    text = "Actor: ${action.requestedBy}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                action.lastError?.let {
+                                    Text(
+                                        text = "Last error: $it",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                SectionCard(
+                    title = "Chain of events",
+                    eyebrow = "Immutable evidence plus mutable notes"
+                ) {
+                    if (content.evidenceChain.isEmpty()) {
+                        Text(
+                            text = "No case evidence entries yet.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        content.evidenceChain.forEach { entry ->
+                            SectionCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                title = entry.title,
+                                eyebrow = formatEpochMillis(entry.occurredAtEpochMs)
+                            ) {
+                                Text(text = entry.summary)
+                                Text(
+                                    text = "Type: ${entry.kind.name.replace('_', ' ')}${entry.actorLabel?.let { " • $it" } ?: ""}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (entry.mutable) {
+                                    Text(
+                                        text = "Editable note entry",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                             }
                         }
                     }

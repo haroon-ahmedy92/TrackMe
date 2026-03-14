@@ -4,11 +4,13 @@ from app.services.audit_log_service import AuditLogService
 from app.services.audit_service import AuditService
 from app.services.auth_identity_service import AuthIdentityService
 from app.services.case_management_service import CaseManagementService
+from app.services.case_evidence_service import CaseEvidenceService
 from app.services.command_queue_service import CommandQueueService
 from app.services.command_signing_service import CommandSigningService
 from app.services.device_key_service import DeviceKeyService
 from app.services.device_registry_service import DeviceRegistryService
 from app.services.enrollment_service import EnrollmentService
+from app.services.evidence_export_bundle_service import EvidenceExportBundleService
 from app.services.geofence_service import GeofenceService
 from app.services.incident_service import IncidentService
 from app.services.incident_state_machine import IncidentStateMachine
@@ -103,6 +105,14 @@ def get_location_ingestion_service() -> LocationIngestionService:
 
 def get_case_management_service() -> CaseManagementService:
     return CaseManagementService(state_machine=IncidentStateMachine())
+
+
+def get_case_evidence_service() -> CaseEvidenceService:
+    return CaseEvidenceService()
+
+
+def get_evidence_export_bundle_service() -> EvidenceExportBundleService:
+    return EvidenceExportBundleService()
 
 
 def get_remote_action_service() -> RemoteActionService:
