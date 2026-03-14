@@ -29,6 +29,10 @@ class TrackingPreferencesDataSource @Inject constructor(
         it[LOST_INTERVAL_MINUTES] ?: DEFAULT_LOST_INTERVAL_MINUTES
     }
 
+    val misplacedIntervalMinutes: Flow<Long> = context.trackingDataStore.data.map {
+        it[MISPLACED_INTERVAL_MINUTES] ?: DEFAULT_MISPLACED_INTERVAL_MINUTES
+    }
+
     val geofenceProtectionEnabled: Flow<Boolean> = context.trackingDataStore.data.map {
         it[GEOFENCE_ENABLED] ?: DEFAULT_GEOFENCE_ENABLED
     }
@@ -49,9 +53,10 @@ class TrackingPreferencesDataSource @Inject constructor(
         it[EXPLICIT_TRACKING_CONSENT_AT_EPOCH_MS]
     }
 
-    suspend fun setIntervals(normalMinutes: Long, lostMinutes: Long) {
+    suspend fun setIntervals(normalMinutes: Long, misplacedMinutes: Long, lostMinutes: Long) {
         context.trackingDataStore.edit {
             it[NORMAL_INTERVAL_MINUTES] = normalMinutes
+            it[MISPLACED_INTERVAL_MINUTES] = misplacedMinutes
             it[LOST_INTERVAL_MINUTES] = lostMinutes
         }
     }
@@ -81,6 +86,7 @@ class TrackingPreferencesDataSource @Inject constructor(
 
     companion object {
         private val NORMAL_INTERVAL_MINUTES = longPreferencesKey("normal_interval_minutes")
+        private val MISPLACED_INTERVAL_MINUTES = longPreferencesKey("misplaced_interval_minutes")
         private val LOST_INTERVAL_MINUTES = longPreferencesKey("lost_interval_minutes")
         private val GEOFENCE_ENABLED = booleanPreferencesKey("geofence_enabled")
         private val GEOFENCE_RADIUS_METERS = intPreferencesKey("geofence_radius_meters")
@@ -92,6 +98,7 @@ class TrackingPreferencesDataSource @Inject constructor(
             longPreferencesKey("explicit_tracking_consent_at_epoch_ms")
 
         const val DEFAULT_NORMAL_INTERVAL_MINUTES = 120L
+        const val DEFAULT_MISPLACED_INTERVAL_MINUTES = 60L
         const val DEFAULT_LOST_INTERVAL_MINUTES = 15L
         const val DEFAULT_GEOFENCE_ENABLED = false
         const val DEFAULT_GEOFENCE_RADIUS_METERS = 250

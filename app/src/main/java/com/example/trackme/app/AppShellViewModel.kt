@@ -6,6 +6,7 @@ import com.example.trackme.commands.DeviceCommandSyncScheduler
 import com.example.trackme.commands.PushTokenRegistrationCoordinator
 import com.example.trackme.data.preferences.TrackingPreferencesDataSource
 import com.example.trackme.domain.repository.EnrollmentRepository
+import com.example.trackme.telemetry.TelemetrySyncScheduler
 import com.example.trackme.worker.CheckInScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -22,6 +23,7 @@ class AppShellViewModel @Inject constructor(
     trackingPreferences: TrackingPreferencesDataSource,
     private val checkInScheduler: CheckInScheduler,
     private val commandSyncScheduler: DeviceCommandSyncScheduler,
+    private val telemetrySyncScheduler: TelemetrySyncScheduler,
     private val pushTokenRegistrationCoordinator: PushTokenRegistrationCoordinator
 ) : ViewModel() {
 
@@ -36,6 +38,7 @@ class AppShellViewModel @Inject constructor(
         viewModelScope.launch {
             checkInScheduler.scheduleNormalCheckIn()
             commandSyncScheduler.schedulePeriodicSync()
+            telemetrySyncScheduler.schedulePeriodicSync()
             pushTokenRegistrationCoordinator.registerCurrentTokenIfAvailable()
         }
     }

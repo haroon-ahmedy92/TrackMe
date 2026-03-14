@@ -66,6 +66,9 @@ from app.schemas.platform import (
     IpEnrichmentRequest,
     IpEnrichmentResponse,
     LocationEventPointResponse,
+    LocationBatchIngestRequest,
+    LocationBatchIngestResponse,
+    LocationBatchIngestItemResponse,
     LocationIngestRequest,
     LocationIngestResponse,
     NotificationCreateRequest,
@@ -341,6 +344,77 @@ async def ingest_location(
         ip_is_approximate=result.event.is_ip_approximate,
         rule_matches=result.rule_matches,
         suspicious_alerts=result.suspicious_alerts,
+    )
+
+
+@router.post('/locations/ingest-batch', response_model=LocationBatchIngestResponse)
+async def ingest_location_batch(
+    payload: LocationBatchIngestRequest,
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.OWNER)),
+    session: AsyncSession = Depends(get_db_session),
+    service: LocationIngestionService = Depends(get_location_ingestion_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> LocationBatchIngestResponse:
+    results: list[LocationBatchIngestItemResponse] = []
+    accepted_count = 0
+    duplicate_count = 0
+    failed_count = 0
+
+    for item in payload.items:
+        _assert_org_access(principal, item.org_id)
+        try:
+            result = await service.ingest(session, item)
+            await audit_log_service.append(
+                session,
+                org_id=str(item.org_id),
+                actor_sub=principal.subject,
+                action='LOCATION_INGESTED',
+                entity_type='location_event',
+                entity_id=str(result.event.id),
+                metadata={
+                    'device_id': str(item.device_id),
+                    'duplicate': result.duplicate,
+                    'precision': item.precision.value,
+                    'confidence_score': item.confidence_score,
+                    'rule_matches': result.rule_matches,
+                    'ip_approximate': result.event.is_ip_approximate,
+                    'telemetry_digest_matches': result.telemetry_digest_matches,
+                    'integrity_status': result.integrity_status,
+                    'suspicious_alerts': result.suspicious_alerts,
+                    'batched': True,
+                },
+            )
+            if result.duplicate:
+                duplicate_count += 1
+            else:
+                accepted_count += 1
+            results.append(
+                LocationBatchIngestItemResponse(
+                    idempotency_key=item.idempotency_key,
+                    event_id=result.event.id,
+                    accepted=not result.duplicate,
+                    duplicate=result.duplicate,
+                    error=None,
+                )
+            )
+        except ValueError as exc:
+            failed_count += 1
+            results.append(
+                LocationBatchIngestItemResponse(
+                    idempotency_key=item.idempotency_key,
+                    event_id=None,
+                    accepted=False,
+                    duplicate=False,
+                    error=str(exc),
+                )
+            )
+
+    await session.commit()
+    return LocationBatchIngestResponse(
+        accepted_count=accepted_count,
+        duplicate_count=duplicate_count,
+        failed_count=failed_count,
+        results=results,
     )
 
 

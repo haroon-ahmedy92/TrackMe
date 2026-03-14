@@ -111,7 +111,11 @@ private class FakeCheckInScheduler : CheckInScheduler {
         normalScheduled = true
     }
 
+    override suspend fun scheduleMisplacedCheckIn() = Unit
+
     override suspend fun scheduleLostModeCheckIn(untilEpochMs: Long) = Unit
+
+    override suspend fun cancelMisplacedCheckIn() = Unit
 
     override suspend fun cancelLostModeCheckIn() = Unit
 }

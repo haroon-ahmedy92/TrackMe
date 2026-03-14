@@ -35,6 +35,24 @@ class CheckInSchedulerImpl @Inject constructor(
         )
     }
 
+    override suspend fun scheduleMisplacedCheckIn() {
+        val consentGranted = preferences.explicitTrackingConsentGranted.first()
+        if (!consentGranted) {
+            workManager.cancelUniqueWork(MISPLACED_WORK_NAME)
+            return
+        }
+        val intervalMinutes = preferences.misplacedIntervalMinutes.first().coerceAtLeast(MIN_WORK_INTERVAL_MINUTES)
+        val request = PeriodicWorkRequestBuilder<MisplacedCheckInWorker>(intervalMinutes, TimeUnit.MINUTES)
+            .setConstraints(defaultConstraints())
+            .build()
+
+        workManager.enqueueUniquePeriodicWork(
+            MISPLACED_WORK_NAME,
+            ExistingPeriodicWorkPolicy.UPDATE,
+            request
+        )
+    }
+
     override suspend fun scheduleLostModeCheckIn(untilEpochMs: Long) {
         val consentGranted = preferences.explicitTrackingConsentGranted.first()
         if (!consentGranted) {
@@ -58,6 +76,10 @@ class CheckInSchedulerImpl @Inject constructor(
         workManager.cancelUniqueWork(LOST_WORK_NAME)
     }
 
+    override suspend fun cancelMisplacedCheckIn() {
+        workManager.cancelUniqueWork(MISPLACED_WORK_NAME)
+    }
+
     private fun defaultConstraints(): Constraints {
         return Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
@@ -68,6 +90,7 @@ class CheckInSchedulerImpl @Inject constructor(
     companion object {
         private const val MIN_WORK_INTERVAL_MINUTES = 15L
         const val NORMAL_WORK_NAME = "normal_check_in"
+        const val MISPLACED_WORK_NAME = "misplaced_check_in"
         const val LOST_WORK_NAME = "lost_mode_check_in"
     }
 }

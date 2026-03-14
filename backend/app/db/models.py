@@ -37,6 +37,7 @@ class EnrollmentType(str, enum.Enum):
 
 class CheckInMode(str, enum.Enum):
     NORMAL = 'normal'
+    MISPLACED = 'misplaced'
     LOST_MODE = 'lost_mode'
 
 

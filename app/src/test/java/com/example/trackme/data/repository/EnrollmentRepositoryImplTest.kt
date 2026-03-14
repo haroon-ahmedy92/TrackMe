@@ -14,6 +14,8 @@ import com.example.trackme.data.network.IncidentRecordResponseDto
 import com.example.trackme.data.network.IncidentRemoteActionResponseDto
 import com.example.trackme.data.network.IncidentResolutionRequestDto
 import com.example.trackme.data.network.IncidentTimelineEventDto
+import com.example.trackme.data.network.LocationIngestBatchRequestDto
+import com.example.trackme.data.network.LocationIngestBatchResponseDto
 import com.example.trackme.data.network.MarkDeviceLostRequestDto
 import com.example.trackme.data.network.OwnershipBindingResponseDto
 import com.example.trackme.data.network.PairingCompleteRequestDto
@@ -134,6 +136,10 @@ private class FakeRecoveryApi(
     private val binding: OwnershipBindingResponseDto?
 ) : RecoveryApi {
     override suspend fun submitCheckIn(request: com.example.trackme.data.network.CheckInRequest) = Unit
+
+    override suspend fun ingestLocationsBatch(request: LocationIngestBatchRequestDto): LocationIngestBatchResponseDto {
+        error("Not needed in this test")
+    }
 
     override suspend fun submitAuditEvent(request: com.example.trackme.data.network.AuditEventRequest) = Unit
 

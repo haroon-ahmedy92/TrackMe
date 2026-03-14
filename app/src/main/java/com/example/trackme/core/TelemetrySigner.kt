@@ -6,7 +6,7 @@ import javax.inject.Inject
  * Placeholder signer for telemetry integrity. Replace with Android Keystore-backed signing in production.
  */
 interface TelemetrySigner {
-    fun sign(payload: String): SignedPayload
+    fun sign(payload: String, keyIdHint: String? = null): SignedPayload
 }
 
 data class SignedPayload(
@@ -19,9 +19,9 @@ data class SignedPayload(
 class HashTelemetrySigner @Inject constructor(
     private val hasher: Hasher
 ) : TelemetrySigner {
-    override fun sign(payload: String): SignedPayload {
+    override fun sign(payload: String, keyIdHint: String?): SignedPayload {
         val payloadHash = hasher.sha256(payload)
-        val keyId = "local-placeholder-key-v1"
+        val keyId = keyIdHint?.takeIf { it.isNotBlank() } ?: "local-placeholder-key-v1"
         return SignedPayload(
             // Placeholder signature shape: SHA256(keyId:payloadHash).
             // TODO(security): replace with Android Keystore-backed asymmetric signatures.

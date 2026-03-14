@@ -9,6 +9,7 @@ import com.example.trackme.data.local.dao.DeviceStateDao
 import com.example.trackme.data.local.dao.EnrollmentDao
 import com.example.trackme.data.local.dao.IncidentDao
 import com.example.trackme.data.local.dao.LocationDao
+import com.example.trackme.data.local.dao.TelemetryQueueDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -39,6 +40,9 @@ object DatabaseModule {
 
     @Provides
     fun provideLocationDao(database: TrackMeDatabase): LocationDao = database.locationDao()
+
+    @Provides
+    fun provideTelemetryQueueDao(database: TrackMeDatabase): TelemetryQueueDao = database.telemetryQueueDao()
 
     @Provides
     fun provideAuditDao(database: TrackMeDatabase): AuditDao = database.auditDao()

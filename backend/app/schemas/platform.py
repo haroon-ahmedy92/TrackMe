@@ -138,6 +138,25 @@ class LocationIngestResponse(BaseModel):
     suspicious_alerts: list[str] = Field(default_factory=list)
 
 
+class LocationBatchIngestRequest(BaseModel):
+    items: list[LocationIngestRequest] = Field(default_factory=list, min_length=1, max_length=100)
+
+
+class LocationBatchIngestItemResponse(BaseModel):
+    idempotency_key: str
+    event_id: UUID | None = None
+    accepted: bool
+    duplicate: bool
+    error: str | None = None
+
+
+class LocationBatchIngestResponse(BaseModel):
+    accepted_count: int
+    duplicate_count: int
+    failed_count: int
+    results: list[LocationBatchIngestItemResponse] = Field(default_factory=list)
+
+
 class IncidentCreateRequest(BaseModel):
     org_id: UUID
     device_id: UUID

@@ -8,6 +8,7 @@ import com.example.trackme.data.local.dao.DeviceStateDao
 import com.example.trackme.data.local.dao.EnrollmentDao
 import com.example.trackme.data.local.dao.IncidentDao
 import com.example.trackme.data.local.dao.LocationDao
+import com.example.trackme.data.local.dao.TelemetryQueueDao
 import com.example.trackme.data.local.entity.AuditEventEntity
 import com.example.trackme.data.local.entity.DeviceCommandEntity
 import com.example.trackme.data.local.entity.DeviceStateEntity
@@ -18,6 +19,7 @@ import com.example.trackme.data.local.entity.IncidentNoteEntity
 import com.example.trackme.data.local.entity.IncidentStateEntity
 import com.example.trackme.data.local.entity.IncidentTimelineEntity
 import com.example.trackme.data.local.entity.LocationSampleEntity
+import com.example.trackme.data.local.entity.TelemetryQueueEntity
 
 @Database(
     entities = [
@@ -30,9 +32,10 @@ import com.example.trackme.data.local.entity.LocationSampleEntity
         IncidentTimelineEntity::class,
         IncidentNoteEntity::class,
         IncidentAttachmentReferenceEntity::class,
-        IncidentEvidenceExportEntity::class
+        IncidentEvidenceExportEntity::class,
+        TelemetryQueueEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class TrackMeDatabase : RoomDatabase() {
@@ -40,6 +43,7 @@ abstract class TrackMeDatabase : RoomDatabase() {
     abstract fun deviceStateDao(): DeviceStateDao
     abstract fun deviceCommandDao(): DeviceCommandDao
     abstract fun locationDao(): LocationDao
+    abstract fun telemetryQueueDao(): TelemetryQueueDao
     abstract fun auditDao(): AuditDao
     abstract fun incidentDao(): IncidentDao
 }

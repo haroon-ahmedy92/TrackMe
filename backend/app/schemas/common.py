@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 class Mode(str, Enum):
     NORMAL = 'normal'
+    MISPLACED = 'misplaced'
     LOST_MODE = 'lost_mode'
 
 

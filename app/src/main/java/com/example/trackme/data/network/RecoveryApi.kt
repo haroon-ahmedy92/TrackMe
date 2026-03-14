@@ -12,6 +12,11 @@ interface RecoveryApi {
     @POST("v1/check-ins")
     suspend fun submitCheckIn(@Body request: CheckInRequest)
 
+    @POST("v1/platform/locations/ingest-batch")
+    suspend fun ingestLocationsBatch(
+        @Body request: LocationIngestBatchRequestDto
+    ): LocationIngestBatchResponseDto
+
     @POST("v1/audit-events")
     suspend fun submitAuditEvent(@Body request: AuditEventRequest)
 

@@ -28,6 +28,7 @@ import com.example.trackme.data.repository.IncidentNotificationGatewayImpl
 import com.example.trackme.data.repository.IncidentRepositoryImpl
 import com.example.trackme.data.repository.LocationRepositoryImpl
 import com.example.trackme.data.repository.PolicyRepositoryImpl
+import com.example.trackme.data.repository.TelemetrySyncRepositoryImpl
 import com.example.trackme.domain.repository.AuditRepository
 import com.example.trackme.domain.repository.CommandRepository
 import com.example.trackme.domain.repository.DeviceCapabilityRepository
@@ -41,6 +42,7 @@ import com.example.trackme.domain.repository.IncidentNotificationGateway
 import com.example.trackme.domain.repository.IncidentRepository
 import com.example.trackme.domain.repository.LocationRepository
 import com.example.trackme.domain.repository.PolicyRepository
+import com.example.trackme.domain.repository.TelemetrySyncRepository
 import com.example.trackme.location.DeviceLocationProvider
 import com.example.trackme.location.FusedDeviceLocationProvider
 import com.example.trackme.location.GeofenceEventContextProvider
@@ -53,6 +55,8 @@ import com.example.trackme.location.AndroidWifiRttCapabilityChecker
 import com.example.trackme.location.DefaultMotionContextProvider
 import com.example.trackme.location.NetworkContextCollector
 import com.example.trackme.location.WifiRttCapabilityChecker
+import com.example.trackme.telemetry.GzipTelemetryCompressionCodec
+import com.example.trackme.telemetry.TelemetryCompressionCodec
 import com.example.trackme.worker.CheckInScheduler
 import com.example.trackme.worker.CheckInSchedulerImpl
 import com.example.trackme.worker.IncidentActionSchedulerImpl
@@ -134,6 +138,10 @@ abstract class BindingModule {
 
     @Binds
     @Singleton
+    abstract fun bindTelemetrySyncRepository(impl: TelemetrySyncRepositoryImpl): TelemetrySyncRepository
+
+    @Binds
+    @Singleton
     abstract fun bindIncidentRepository(impl: IncidentRepositoryImpl): IncidentRepository
 
     @Binds
@@ -187,6 +195,10 @@ abstract class BindingModule {
     @Binds
     @Singleton
     abstract fun bindTelemetrySigner(impl: HashTelemetrySigner): TelemetrySigner
+
+    @Binds
+    @Singleton
+    abstract fun bindTelemetryCompressionCodec(impl: GzipTelemetryCompressionCodec): TelemetryCompressionCodec
 
     @Binds
     @Singleton

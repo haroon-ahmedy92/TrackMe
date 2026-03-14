@@ -1,6 +1,7 @@
 package com.example.trackme.di
 
 import com.example.trackme.data.network.RecoveryApi
+import com.example.trackme.data.network.TelemetryCompressionInterceptor
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import dagger.Module
 import dagger.Provides
@@ -19,8 +20,11 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(): OkHttpClient {
+    fun provideOkHttpClient(
+        telemetryCompressionInterceptor: TelemetryCompressionInterceptor
+    ): OkHttpClient {
         return OkHttpClient.Builder()
+            .addInterceptor(telemetryCompressionInterceptor)
             .addInterceptor(HttpLoggingInterceptor().apply {
                 level = HttpLoggingInterceptor.Level.BASIC
             })
