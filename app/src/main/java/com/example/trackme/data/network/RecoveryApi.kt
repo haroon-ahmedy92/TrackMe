@@ -18,6 +18,23 @@ interface RecoveryApi {
     @POST("v1/ownership/pairings/complete")
     suspend fun completePairing(@Body request: PairingCompleteRequestDto): OwnershipBindingResponseDto
 
+
+    @POST("v1/commands/device-tokens")
+    suspend fun registerDevicePushToken(
+        @Body request: DevicePushTokenRegistrationRequestDto
+    )
+
+    @POST("v1/commands/sync")
+    suspend fun syncPendingCommands(
+        @Body request: DeviceCommandSyncRequestDto
+    ): List<CommandEnvelopeDto>
+
+    @POST("v1/commands/{commandId}/ack")
+    suspend fun acknowledgeCommand(
+        @Path("commandId") commandId: String,
+        @Body request: CommandAckRequestDto
+    )
+
     @POST("v1/incidents/mark-lost")
     suspend fun markDeviceLost(@Body request: MarkDeviceLostRequestDto): IncidentRecordResponseDto
 

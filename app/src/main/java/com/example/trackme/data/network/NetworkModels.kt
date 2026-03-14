@@ -72,3 +72,46 @@ data class OwnershipBindingResponseDto(
     @SerialName("created_at") val createdAt: String,
     @SerialName("ended_at") val endedAt: String? = null,
 )
+
+@Serializable
+data class DevicePushTokenRegistrationRequestDto(
+    val orgId: String,
+    val deviceId: String,
+    val keyId: String,
+    val pushToken: String,
+    val appVersion: String? = null,
+)
+
+@Serializable
+data class DeviceCommandSyncRequestDto(
+    val orgId: String,
+    val deviceId: String,
+    val keyId: String,
+)
+
+@Serializable
+data class CommandEnvelopeDto(
+    val remoteActionId: String,
+    val orgId: String,
+    val deviceId: String,
+    val incidentId: String? = null,
+    val actionKind: String,
+    val state: String,
+    val reason: String,
+    val payload: Map<String, kotlinx.serialization.json.JsonElement>,
+    val signature: String,
+    val signatureAlgorithm: String,
+    val requestedBySub: String,
+    val requestedAt: String,
+    val expiresAt: String? = null,
+)
+
+@Serializable
+data class CommandAckRequestDto(
+    val orgId: String,
+    val deviceId: String,
+    val keyId: String,
+    val status: String,
+    val errorMessage: String? = null,
+    val metadata: Map<String, String> = emptyMap(),
+)

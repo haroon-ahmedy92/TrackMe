@@ -92,4 +92,7 @@
 
     <string name="audit_title">Audit History</string>
     <string name="audit_empty">No audit events yet.</string>
+    <string name="recovery_notification_channel_name">Recovery Commands</string>
+    <string name="recovery_notification_channel_description">Visible recovery messages and remote command updates.</string>
+    <string name="recovery_notification_title">Recovery Message</string>
 </resources>

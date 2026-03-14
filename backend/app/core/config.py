@@ -27,6 +27,12 @@ class Settings(BaseModel):
     rate_limit_window_seconds: int = 60
     rate_limit_requests: int = 120
 
+    fcm_server_key: str | None = None
+    fcm_endpoint: str = 'https://fcm.googleapis.com/fcm/send'
+    command_signing_secret: str | None = None
+    command_default_ttl_minutes: int = 60
+    command_max_attempts: int = 5
+
 
 settings = Settings()
 
@@ -48,3 +54,9 @@ settings.allow_insecure_jwt_for_dev = os.getenv(
 ).lower() == 'true'
 settings.rate_limit_window_seconds = int(os.getenv('RATE_LIMIT_WINDOW_SECONDS', settings.rate_limit_window_seconds))
 settings.rate_limit_requests = int(os.getenv('RATE_LIMIT_REQUESTS', settings.rate_limit_requests))
+
+settings.fcm_server_key = os.getenv('FCM_SERVER_KEY', settings.fcm_server_key)
+settings.fcm_endpoint = os.getenv('FCM_ENDPOINT', settings.fcm_endpoint)
+settings.command_signing_secret = os.getenv('COMMAND_SIGNING_SECRET', settings.command_signing_secret)
+settings.command_default_ttl_minutes = int(os.getenv('COMMAND_DEFAULT_TTL_MINUTES', settings.command_default_ttl_minutes))
+settings.command_max_attempts = int(os.getenv('COMMAND_MAX_ATTEMPTS', settings.command_max_attempts))

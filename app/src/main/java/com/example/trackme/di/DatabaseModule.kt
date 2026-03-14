@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.example.trackme.data.local.TrackMeDatabase
 import com.example.trackme.data.local.dao.AuditDao
+import com.example.trackme.data.local.dao.DeviceCommandDao
 import com.example.trackme.data.local.dao.DeviceStateDao
 import com.example.trackme.data.local.dao.EnrollmentDao
 import com.example.trackme.data.local.dao.IncidentDao
@@ -32,6 +33,9 @@ object DatabaseModule {
 
     @Provides
     fun provideDeviceStateDao(database: TrackMeDatabase): DeviceStateDao = database.deviceStateDao()
+
+    @Provides
+    fun provideDeviceCommandDao(database: TrackMeDatabase): DeviceCommandDao = database.deviceCommandDao()
 
     @Provides
     fun provideLocationDao(database: TrackMeDatabase): LocationDao = database.locationDao()

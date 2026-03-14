@@ -232,7 +232,9 @@ class NotificationCreateRequest(BaseModel):
     org_id: UUID
     incident_id: UUID | None = None
     device_id: UUID | None = None
+    remote_action_id: UUID | None = None
     recipient_sub: str | None = Field(default=None, max_length=150)
+    recipient_token: str | None = Field(default=None, max_length=255)
     channel: str = Field(min_length=2, max_length=32)
     template: str = Field(min_length=2, max_length=80)
     payload: dict = Field(default_factory=dict)

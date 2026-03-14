@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import actions, audit, devices, health, incidents, ownership, platform, telemetry
+from app.api.v1.endpoints import actions, audit, commands, devices, health, incidents, ownership, platform, telemetry
 
 router = APIRouter()
 router.include_router(health.router)
@@ -13,3 +13,5 @@ router.include_router(incidents.router)
 router.include_router(platform.router)
 router.include_router(audit.router)
 router.include_router(ownership.router)
+
+router.include_router(commands.router)

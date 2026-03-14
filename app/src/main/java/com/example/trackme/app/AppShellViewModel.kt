@@ -2,6 +2,8 @@ package com.example.trackme.app
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.trackme.commands.DeviceCommandSyncScheduler
+import com.example.trackme.commands.PushTokenRegistrationCoordinator
 import com.example.trackme.data.preferences.TrackingPreferencesDataSource
 import com.example.trackme.domain.repository.EnrollmentRepository
 import com.example.trackme.worker.CheckInScheduler
@@ -18,7 +20,9 @@ import kotlinx.coroutines.launch
 class AppShellViewModel @Inject constructor(
     enrollmentRepository: EnrollmentRepository,
     trackingPreferences: TrackingPreferencesDataSource,
-    private val checkInScheduler: CheckInScheduler
+    private val checkInScheduler: CheckInScheduler,
+    private val commandSyncScheduler: DeviceCommandSyncScheduler,
+    private val pushTokenRegistrationCoordinator: PushTokenRegistrationCoordinator
 ) : ViewModel() {
 
     val isEnrolled: StateFlow<Boolean?> = combine(
@@ -31,6 +35,8 @@ class AppShellViewModel @Inject constructor(
     fun ensureNormalScheduling() {
         viewModelScope.launch {
             checkInScheduler.scheduleNormalCheckIn()
+            commandSyncScheduler.schedulePeriodicSync()
+            pushTokenRegistrationCoordinator.registerCurrentTokenIfAvailable()
         }
     }
 }

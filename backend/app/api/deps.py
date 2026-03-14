@@ -4,6 +4,8 @@ from app.services.audit_log_service import AuditLogService
 from app.services.audit_service import AuditService
 from app.services.auth_identity_service import AuthIdentityService
 from app.services.case_management_service import CaseManagementService
+from app.services.command_queue_service import CommandQueueService
+from app.services.command_signing_service import CommandSigningService
 from app.services.device_key_service import DeviceKeyService
 from app.services.device_registry_service import DeviceRegistryService
 from app.services.enrollment_service import EnrollmentService
@@ -15,7 +17,8 @@ from app.services.ip_enrichment_service import IpEnrichmentService
 from app.services.location_ingestion_service import LocationIngestionService
 from app.services.location_confidence import LocationConfidenceService
 from app.services.notification_event_service import NotificationEventService
-from app.services.notification_service import NoopNotificationService, NotificationService
+from app.services.notification_service import FcmNotificationService, NotificationService
+from app.services.notification_template_service import NotificationTemplateService
 from app.services.ownership_access_service import OwnershipAccessService
 from app.services.remote_action_service import RemoteActionService
 from app.services.rules_engine_service import RulesEngineService
@@ -37,7 +40,7 @@ def get_telemetry_service() -> TelemetryService:
 
 
 def get_notification_service() -> NotificationService:
-    return NoopNotificationService()
+    return FcmNotificationService()
 
 
 def get_incident_service() -> IncidentService:
@@ -114,3 +117,19 @@ def get_geofence_service() -> GeofenceService:
 
 def get_ownership_access_service() -> OwnershipAccessService:
     return OwnershipAccessService()
+
+
+def get_command_signing_service() -> CommandSigningService:
+    return CommandSigningService()
+
+
+def get_notification_template_service() -> NotificationTemplateService:
+    return NotificationTemplateService()
+
+
+def get_command_queue_service() -> CommandQueueService:
+    return CommandQueueService(
+        signing_service=get_command_signing_service(),
+        notification_event_service=get_notification_event_service(),
+        notification_template_service=get_notification_template_service(),
+    )

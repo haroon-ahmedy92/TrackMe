@@ -86,6 +86,7 @@ dependencies {
     implementation(libs.okhttp.logging.interceptor)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.firebase.messaging)
 
     debugImplementation(platform(libs.androidx.compose.bom))
     debugImplementation("androidx.compose.ui:ui-tooling")

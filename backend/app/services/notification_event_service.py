@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +23,9 @@ class NotificationEventService:
             org_id=payload.org_id,
             incident_id=payload.incident_id,
             device_id=payload.device_id,
+            remote_action_id=payload.remote_action_id,
             recipient_sub=payload.recipient_sub,
+            recipient_token=payload.recipient_token,
             channel=payload.channel,
             template=payload.template,
             payload_json=payload.payload,
@@ -36,18 +39,46 @@ class NotificationEventService:
         await session.flush()
 
         try:
-            await self.provider.send(
+            provider_message_id = await self.provider.send(
                 NotificationMessage(
-                    title=payload.template,
-                    body=str(payload.payload),
-                    device_token=payload.recipient_sub or 'unknown-recipient',
+                    title=str(payload.payload.get('title', payload.template)),
+                    body=str(payload.payload.get('body', payload.payload)),
+                    device_token=payload.recipient_token or payload.recipient_sub or 'unknown-recipient',
+                    data={k: str(v) for k, v in payload.payload.get('data', {}).items()},
                 )
             )
             record.status = NotificationStatus.SENT
             record.sent_at = datetime.now(timezone.utc)
-            record.provider_message_id = f'noop-{record.id}'
+            record.provider_message_id = provider_message_id
         except Exception as exc:  # pragma: no cover
             record.status = NotificationStatus.FAILED
             record.error_message = str(exc)[:250]
         await session.flush()
         return record
+
+    async def create_for_device(
+        self,
+        session: AsyncSession,
+        *,
+        org_id: UUID,
+        device_id: UUID,
+        remote_action_id: UUID | None,
+        recipient_token: str,
+        template: str,
+        payload: dict,
+        incident_id: UUID | None = None,
+    ) -> NotificationEvent:
+        return await self.create_and_send(
+            session,
+            NotificationCreateRequest(
+                org_id=org_id,
+                incident_id=incident_id,
+                device_id=device_id,
+                remote_action_id=remote_action_id,
+                recipient_sub=None,
+                recipient_token=recipient_token,
+                channel='fcm',
+                template=template,
+                payload=payload,
+            ),
+        )

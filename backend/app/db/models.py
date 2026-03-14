@@ -77,6 +77,7 @@ class Device(Base):
     enrollments: Mapped[list['Enrollment']] = relationship(back_populates='device')
     geofences: Mapped[list['Geofence']] = relationship(back_populates='device')
     remote_actions: Mapped[list['RemoteAction']] = relationship(back_populates='device')
+    push_tokens: Mapped[list['DevicePushToken']] = relationship(back_populates='device')
     ownership_bindings: Mapped[list['DeviceOwnershipBinding']] = relationship()
     access_policies: Mapped[list['DeviceAccessPolicy']] = relationship()
     pairing_tokens: Mapped[list['PairingToken']] = relationship()
@@ -225,16 +226,19 @@ class IncidentCaseState(str, enum.Enum):
 
 
 class RemoteActionKind(str, enum.Enum):
+    ENTER_LOST_MODE = 'enter_lost_mode'
+    DISPLAY_RECOVERY_MESSAGE = 'display_recovery_message'
     LOCK = 'lock'
     WIPE = 'wipe'
 
 
 class RemoteActionState(str, enum.Enum):
-    REQUESTED = 'requested'
-    DISPATCHED = 'dispatched'
-    APPLIED = 'applied'
+    PENDING = 'pending'
+    SENT = 'sent'
+    DELIVERED = 'delivered'
+    ACKED = 'acked'
     FAILED = 'failed'
-    CANCELLED = 'cancelled'
+    EXPIRED = 'expired'
 
 
 class NotificationStatus(str, enum.Enum):
@@ -520,6 +524,7 @@ class RemoteAction(Base):
     __tablename__ = 'remote_actions'
     __table_args__ = (
         Index('ix_remote_actions_org_requested', 'org_id', 'requested_at'),
+        Index('ix_remote_actions_device_state', 'device_id', 'state'),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -529,13 +534,46 @@ class RemoteAction(Base):
     action_kind: Mapped[RemoteActionKind] = mapped_column(Enum(RemoteActionKind), nullable=False)
     state: Mapped[RemoteActionState] = mapped_column(Enum(RemoteActionState), nullable=False)
     reason: Mapped[str] = mapped_column(String(250), nullable=False)
+    command_payload_json: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    command_signature: Mapped[str] = mapped_column(String(128), nullable=False)
+    signature_algorithm: Mapped[str] = mapped_column(String(40), nullable=False)
     requires_elevated_confirmation: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     delayed_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     requested_by_sub: Mapped[str] = mapped_column(String(150), nullable=False)
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    acked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_error: Mapped[str | None] = mapped_column(String(250), nullable=True)
+    acknowledgement_metadata_json: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     device: Mapped['Device'] = relationship(back_populates='remote_actions')
+
+
+class DevicePushToken(Base):
+    __tablename__ = 'device_push_tokens'
+    __table_args__ = (
+        Index('ix_device_push_tokens_org_device_active', 'org_id', 'device_id', 'is_active'),
+        UniqueConstraint('push_token', name='uq_device_push_tokens_token'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('orgs.id'), nullable=False)
+    device_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('devices.id'), nullable=False)
+    key_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    push_token: Mapped[str] = mapped_column(String(255), nullable=False)
+    platform: Mapped[str] = mapped_column(String(24), nullable=False, default='android')
+    app_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    invalidated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    device: Mapped['Device'] = relationship(back_populates='push_tokens')
 
 
 class AuditLog(Base):
@@ -566,7 +604,9 @@ class NotificationEvent(Base):
     org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('orgs.id'), nullable=False)
     incident_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey('incidents.id'), nullable=True)
     device_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey('devices.id'), nullable=True)
+    remote_action_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey('remote_actions.id'), nullable=True)
     recipient_sub: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    recipient_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
     channel: Mapped[str] = mapped_column(String(32), nullable=False)
     template: Mapped[str] = mapped_column(String(80), nullable=False)
     payload_json: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)

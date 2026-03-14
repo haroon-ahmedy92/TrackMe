@@ -5,7 +5,11 @@ import com.example.trackme.core.security.DeviceKeyMaterial
 import com.example.trackme.core.security.DeviceKeyMaterialGenerator
 import com.example.trackme.data.local.dao.EnrollmentDao
 import com.example.trackme.data.local.entity.EnrollmentEntity
+import com.example.trackme.data.network.CommandAckRequestDto
+import com.example.trackme.data.network.CommandEnvelopeDto
 import com.example.trackme.data.network.ConfirmStolenRequestDto
+import com.example.trackme.data.network.DeviceCommandSyncRequestDto
+import com.example.trackme.data.network.DevicePushTokenRegistrationRequestDto
 import com.example.trackme.data.network.IncidentRecordResponseDto
 import com.example.trackme.data.network.IncidentRemoteActionResponseDto
 import com.example.trackme.data.network.IncidentResolutionRequestDto
@@ -136,6 +140,12 @@ private class FakeRecoveryApi(
     override suspend fun completePairing(request: PairingCompleteRequestDto): OwnershipBindingResponseDto {
         return binding ?: error("backend unavailable")
     }
+
+    override suspend fun registerDevicePushToken(request: DevicePushTokenRegistrationRequestDto) = Unit
+
+    override suspend fun syncPendingCommands(request: DeviceCommandSyncRequestDto): List<CommandEnvelopeDto> = emptyList()
+
+    override suspend fun acknowledgeCommand(commandId: String, request: CommandAckRequestDto) = Unit
 
     override suspend fun markDeviceLost(request: MarkDeviceLostRequestDto): IncidentRecordResponseDto {
         error("Not needed in this test")
