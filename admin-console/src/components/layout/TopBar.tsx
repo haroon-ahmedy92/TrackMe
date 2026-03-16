@@ -1,5 +1,6 @@
 'use client';
 
+import { TrackMeBrand } from '@/components/layout/TrackMeBrand';
 import { authStorage } from '@/lib/auth/storage';
 
 export function TopBar() {
@@ -18,10 +19,7 @@ export function TopBar() {
       }}
     >
       <div>
-        <p style={{ margin: 0, fontWeight: 700 }}>Admin Console</p>
-        <p className="text-muted" style={{ margin: '2px 0 0', fontSize: 13 }}>
-          Visible, consent-based protection workflows only
-        </p>
+        <TrackMeBrand compact subtitle="Visible, consent-based protection workflows only" />
       </div>
       <div style={{ textAlign: 'right' }}>
         <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{profile?.fullName ?? 'Guest'}</p>

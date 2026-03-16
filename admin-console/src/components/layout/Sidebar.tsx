@@ -1,5 +1,6 @@
 'use client';
 
+import { TrackMeBrand } from '@/components/layout/TrackMeBrand';
 import { authStorage } from '@/lib/auth/storage';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -34,10 +35,7 @@ export function Sidebar() {
       }}
     >
       <div style={{ marginBottom: 20 }}>
-        <p style={{ margin: 0, fontWeight: 800 }}>TrackMe Console</p>
-        <p className="text-muted" style={{ margin: '6px 0 0', fontSize: 13 }}>
-          Device Recovery & Protection
-        </p>
+        <TrackMeBrand compact subtitle="Device Recovery & Protection" />
       </div>
 
       <nav className="stack">

@@ -1,5 +1,6 @@
 'use client';
 
+import { TrackMeBrand } from '@/components/layout/TrackMeBrand';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -38,9 +39,14 @@ export default function LoginPage() {
         display: 'grid',
         placeItems: 'center',
         padding: 20,
+        background:
+          'radial-gradient(circle at 22% 28%, rgb(116 41 255 / 0.22), transparent 24%), radial-gradient(circle at 72% 34%, rgb(255 144 31 / 0.2), transparent 22%), linear-gradient(180deg, color-mix(in srgb, var(--surface) 92%, #14161d 8%), var(--bg))',
       }}
     >
       <Card style={{ width: '100%', maxWidth: 420 }}>
+        <div style={{ marginBottom: 18 }}>
+          <TrackMeBrand subtitle="Lawful device recovery for explicitly enrolled or organization-managed devices." />
+        </div>
         <h1 className="page-title">Sign in</h1>
         <p className="page-subtitle">
           Admin access for organization-managed and explicitly enrolled devices only.

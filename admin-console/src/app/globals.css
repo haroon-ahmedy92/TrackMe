@@ -7,6 +7,10 @@
   --border: #d5dde5;
   --primary: #006f8b;
   --primary-contrast: #ffffff;
+  --brand-violet: #6f2dff;
+  --brand-magenta: #ff3d8f;
+  --brand-orange: #ff7d1f;
+  --brand-amber: #ffb538;
   --danger: #bf1e2e;
   --success: #127a41;
   --warning: #9a6c00;
@@ -27,6 +31,10 @@
     --border: #2b3a49;
     --primary: #15a4c3;
     --primary-contrast: #03161d;
+    --brand-violet: #8a4bff;
+    --brand-magenta: #ff549c;
+    --brand-orange: #ff8c25;
+    --brand-amber: #ffc454;
     --danger: #ef5d6a;
     --success: #2fbe72;
     --warning: #f0b548;
@@ -131,6 +139,34 @@ textarea {
 
 .code {
   font-family: "Consolas", "Courier New", monospace;
+}
+
+.brand-mark {
+  filter: drop-shadow(0 0 14px rgb(111 45 255 / 0.26)) drop-shadow(0 0 24px rgb(255 125 31 / 0.18));
+  flex-shrink: 0;
+}
+
+.brand-wordmark {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+  line-height: 0.95;
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  color: #192438;
+}
+
+.brand-track {
+  color: color-mix(in srgb, var(--text) 88%, #111827 12%);
+  text-shadow: 0 2px 10px rgb(17 24 39 / 0.08);
+}
+
+.brand-me {
+  background: linear-gradient(90deg, var(--brand-orange), var(--brand-amber));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 18px rgb(255 125 31 / 0.2);
 }
 
 @keyframes loadingShimmer {
