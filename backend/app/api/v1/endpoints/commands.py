@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_audit_log_service, get_command_queue_service
+from app.api.deps import get_audit_log_service, get_command_queue_service, get_event_publisher_service
 from app.core.security import Principal, Role, require_roles
 from app.db.base import get_db_session
 from app.schemas.commands import (
@@ -20,6 +20,7 @@ from app.schemas.commands import (
 )
 from app.services.audit_log_service import AuditLogService
 from app.services.command_queue_service import CommandQueueService
+from app.services.event_publisher_service import EventPublisherService
 
 router = APIRouter(prefix='/commands', tags=['commands'])
 
@@ -30,6 +31,7 @@ async def queue_command(
     principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY)),
     session: AsyncSession = Depends(get_db_session),
     service: CommandQueueService = Depends(get_command_queue_service),
+    event_publisher: EventPublisherService = Depends(get_event_publisher_service),
     audit_log_service: AuditLogService = Depends(get_audit_log_service),
 ) -> CommandEnvelopeResponse:
     _assert_org_access(principal, payload.org_id)
@@ -40,6 +42,7 @@ async def queue_command(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await event_publisher.schedule_command_pending_check(session, action=action)
 
     await audit_log_service.append(
         session,
@@ -112,12 +115,14 @@ async def acknowledge_command(
     payload: CommandAckRequest,
     session: AsyncSession = Depends(get_db_session),
     service: CommandQueueService = Depends(get_command_queue_service),
+    event_publisher: EventPublisherService = Depends(get_event_publisher_service),
     audit_log_service: AuditLogService = Depends(get_audit_log_service),
 ) -> CommandAckResponse:
     try:
         action = await service.acknowledge_command(session, command_id, payload)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await event_publisher.publish_command_acknowledged(session, action=action)
 
     await audit_log_service.append(
         session,

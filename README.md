@@ -41,6 +41,7 @@ The easiest learning path is:
 6. [`docs/testing.md`](./docs/testing.md)
 7. [`docs/ownership-enrollment-rbac.md`](./docs/ownership-enrollment-rbac.md)
 8. [`docs/compliance-ux.md`](./docs/compliance-ux.md)
+9. [`docs/event-queue-rules.md`](./docs/event-queue-rules.md)
 
 The larger test execution plan also lives in [`TEST_STRATEGY.md`](./TEST_STRATEGY.md).
 

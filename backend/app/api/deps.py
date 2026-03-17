@@ -11,6 +11,9 @@ from app.services.compliance_service import ComplianceService
 from app.services.device_key_service import DeviceKeyService
 from app.services.device_registry_service import DeviceRegistryService
 from app.services.enrollment_service import EnrollmentService
+from app.services.event_consumer_worker import EventConsumerWorker, build_default_event_worker
+from app.services.event_publisher_service import EventPublisherService
+from app.services.event_queue_service import EventQueue, SqlAlchemyEventQueueService
 from app.services.evidence_export_bundle_service import EvidenceExportBundleService
 from app.services.geofence_service import GeofenceService
 from app.services.incident_service import IncidentService
@@ -25,6 +28,7 @@ from app.services.notification_template_service import NotificationTemplateServi
 from app.services.observability_service import ObservabilityService
 from app.services.ownership_access_service import OwnershipAccessService
 from app.services.remote_action_service import RemoteActionService
+from app.services.rule_action_executor import RuleActionExecutor
 from app.services.rules_engine_service import RulesEngineService
 from app.services.spatial_service import SpatialService
 from app.services.signed_telemetry_service import SignedTelemetryService
@@ -95,6 +99,22 @@ def get_rules_engine_service() -> RulesEngineService:
     return RulesEngineService()
 
 
+def get_event_queue_service() -> EventQueue:
+    return SqlAlchemyEventQueueService()
+
+
+def get_event_publisher_service() -> EventPublisherService:
+    return EventPublisherService(queue=get_event_queue_service())
+
+
+def get_rule_action_executor() -> RuleActionExecutor:
+    return RuleActionExecutor(
+        notification_event_service=get_notification_event_service(),
+        audit_log_service=get_audit_log_service(),
+        command_queue_service=get_command_queue_service(),
+    )
+
+
 def get_location_ingestion_service() -> LocationIngestionService:
     return LocationIngestionService(
         signed_telemetry_service=get_signed_telemetry_service(),
@@ -150,6 +170,15 @@ def get_command_queue_service() -> CommandQueueService:
         signing_service=get_command_signing_service(),
         notification_event_service=get_notification_event_service(),
         notification_template_service=get_notification_template_service(),
+    )
+
+
+def get_event_consumer_worker() -> EventConsumerWorker:
+    return build_default_event_worker(
+        queue=get_event_queue_service(),
+        rules_engine=get_rules_engine_service(),
+        action_executor=get_rule_action_executor(),
+        event_publisher=get_event_publisher_service(),
     )
 
 

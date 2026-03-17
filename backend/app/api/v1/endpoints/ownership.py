@@ -8,7 +8,7 @@ from app.db.models import AccessReviewStatus
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_audit_log_service, get_compliance_service, get_ownership_access_service
+from app.api.deps import get_audit_log_service, get_compliance_service, get_event_publisher_service, get_ownership_access_service
 from app.core.security import Principal, Role, require_roles
 from app.db.base import get_db_session
 from app.schemas.ownership import (
@@ -33,6 +33,7 @@ from app.schemas.ownership import (
 from app.schemas.compliance import AccessHistoryEntryResponse, DeprovisionDeviceRequest, DeprovisionDeviceResponse
 from app.services.audit_log_service import AuditLogService
 from app.services.compliance_service import ComplianceService
+from app.services.event_publisher_service import EventPublisherService
 from app.services.ownership_access_service import OwnershipAccessService
 
 router = APIRouter(prefix='/ownership', tags=['ownership'])
@@ -439,6 +440,7 @@ async def locate_device(
     principal: Principal = Depends(require_roles(Role.OWNER, Role.ADMIN, Role.ORG_ADMIN, Role.SUPER_ADMIN)),
     session: AsyncSession = Depends(get_db_session),
     ownership_service: OwnershipAccessService = Depends(get_ownership_access_service),
+    event_publisher: EventPublisherService = Depends(get_event_publisher_service),
     audit_log_service: AuditLogService = Depends(get_audit_log_service),
 ) -> LocateDeviceResponse:
     _assert_org_access(principal, org_id)
@@ -467,6 +469,15 @@ async def locate_device(
             'device_id': str(device_id),
             'request_id': getattr(request.state, 'request_id', None),
         },
+    )
+    await event_publisher.publish_suspicious_access_signal(
+        session,
+        org_id=org_id,
+        device_id=device_id,
+        actor_sub=principal.subject,
+        result='denied' if not decision.allowed else 'requested',
+        reason=payload.reason,
+        request_id=getattr(request.state, 'request_id', None),
     )
     if not decision.allowed:
         await session.commit()

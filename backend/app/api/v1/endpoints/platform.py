@@ -17,6 +17,7 @@ from app.api.deps import (
     get_device_key_service,
     get_device_registry_service,
     get_enrollment_service,
+    get_event_publisher_service,
     get_evidence_export_bundle_service,
     get_geofence_service,
     get_ip_enrichment_service,
@@ -100,6 +101,7 @@ from app.services.compliance_service import ComplianceService
 from app.services.device_key_service import DeviceKeyService
 from app.services.device_registry_service import DeviceRegistryService
 from app.services.enrollment_service import EnrollmentService
+from app.services.event_publisher_service import EventPublisherService
 from app.services.evidence_export_bundle_service import EvidenceExportBundleService
 from app.services.geofence_service import GeofenceService
 from app.services.ip_enrichment_service import IpEnrichmentService
@@ -319,11 +321,20 @@ async def ingest_location(
     principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.OWNER)),
     session: AsyncSession = Depends(get_db_session),
     service: LocationIngestionService = Depends(get_location_ingestion_service),
+    event_publisher: EventPublisherService = Depends(get_event_publisher_service),
     audit_log_service: AuditLogService = Depends(get_audit_log_service),
 ) -> LocationIngestResponse:
     _assert_org_access(principal, payload.org_id)
     payload = payload.model_copy(update={'idempotency_key': idempotency_key or payload.idempotency_key})
     result = await service.ingest(session, payload)
+    await event_publisher.publish_location_updated(
+        session,
+        location_event=result.event,
+        rule_matches=result.rule_matches,
+        suspicious_alerts=result.suspicious_alerts,
+    )
+    for geofence_event in getattr(result, 'geofence_events', []):
+        await event_publisher.publish_geofence_transition(session, geofence_event=geofence_event)
     await audit_log_service.append(
         session,
         org_id=str(payload.org_id),
@@ -363,6 +374,7 @@ async def ingest_location_batch(
     principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.OWNER)),
     session: AsyncSession = Depends(get_db_session),
     service: LocationIngestionService = Depends(get_location_ingestion_service),
+    event_publisher: EventPublisherService = Depends(get_event_publisher_service),
     audit_log_service: AuditLogService = Depends(get_audit_log_service),
 ) -> LocationBatchIngestResponse:
     results: list[LocationBatchIngestItemResponse] = []
@@ -374,6 +386,14 @@ async def ingest_location_batch(
         _assert_org_access(principal, item.org_id)
         try:
             result = await service.ingest(session, item)
+            await event_publisher.publish_location_updated(
+                session,
+                location_event=result.event,
+                rule_matches=result.rule_matches,
+                suspicious_alerts=result.suspicious_alerts,
+            )
+            for geofence_event in getattr(result, 'geofence_events', []):
+                await event_publisher.publish_geofence_transition(session, geofence_event=geofence_event)
             await audit_log_service.append(
                 session,
                 org_id=str(item.org_id),
@@ -446,10 +466,13 @@ async def open_case(
     principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY)),
     session: AsyncSession = Depends(get_db_session),
     service: CaseManagementService = Depends(get_case_management_service),
+    event_publisher: EventPublisherService = Depends(get_event_publisher_service),
     audit_log_service: AuditLogService = Depends(get_audit_log_service),
 ) -> IncidentResponse:
     _assert_org_access(principal, payload.org_id)
     incident = await service.open_case(session, payload)
+    latest_event = (await service.list_case_events(session, incident.id, limit=1))[0]
+    await event_publisher.publish_incident_state_changed(session, incident=incident, incident_event=latest_event)
     await audit_log_service.append(
         session,
         org_id=str(payload.org_id),
@@ -482,6 +505,7 @@ async def case_confirm_stolen(
     principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY)),
     session: AsyncSession = Depends(get_db_session),
     service: CaseManagementService = Depends(get_case_management_service),
+    event_publisher: EventPublisherService = Depends(get_event_publisher_service),
     audit_log_service: AuditLogService = Depends(get_audit_log_service),
 ) -> IncidentResponse:
     incident = await service.get_case(session, incident_id)
@@ -493,6 +517,8 @@ async def case_confirm_stolen(
         payload=payload,
         actor_sub=principal.subject,
     )
+    latest_event = (await service.list_case_events(session, incident.id, limit=1))[0]
+    await event_publisher.publish_incident_state_changed(session, incident=incident, incident_event=latest_event)
     _assert_org_access(principal, incident.org_id)
     await audit_log_service.append(
         session,
@@ -514,6 +540,7 @@ async def case_recover(
     principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.OWNER)),
     session: AsyncSession = Depends(get_db_session),
     service: CaseManagementService = Depends(get_case_management_service),
+    event_publisher: EventPublisherService = Depends(get_event_publisher_service),
     audit_log_service: AuditLogService = Depends(get_audit_log_service),
 ) -> IncidentResponse:
     incident = await service.get_case(session, incident_id)
@@ -521,6 +548,8 @@ async def case_recover(
     incident = await service.apply_transition_request(
         session, incident_id=incident_id, action='recover', payload=payload, actor_sub=principal.subject
     )
+    latest_event = (await service.list_case_events(session, incident.id, limit=1))[0]
+    await event_publisher.publish_incident_state_changed(session, incident=incident, incident_event=latest_event)
     _assert_org_access(principal, incident.org_id)
     await audit_log_service.append(
         session,
@@ -542,6 +571,7 @@ async def case_cancel(
     principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY)),
     session: AsyncSession = Depends(get_db_session),
     service: CaseManagementService = Depends(get_case_management_service),
+    event_publisher: EventPublisherService = Depends(get_event_publisher_service),
     audit_log_service: AuditLogService = Depends(get_audit_log_service),
 ) -> IncidentResponse:
     incident = await service.get_case(session, incident_id)
@@ -549,6 +579,8 @@ async def case_cancel(
     incident = await service.apply_transition_request(
         session, incident_id=incident_id, action='cancel', payload=payload, actor_sub=principal.subject
     )
+    latest_event = (await service.list_case_events(session, incident.id, limit=1))[0]
+    await event_publisher.publish_incident_state_changed(session, incident=incident, incident_event=latest_event)
     _assert_org_access(principal, incident.org_id)
     await audit_log_service.append(
         session,
@@ -570,6 +602,7 @@ async def case_decommission(
     principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN)),
     session: AsyncSession = Depends(get_db_session),
     service: CaseManagementService = Depends(get_case_management_service),
+    event_publisher: EventPublisherService = Depends(get_event_publisher_service),
     audit_log_service: AuditLogService = Depends(get_audit_log_service),
 ) -> IncidentResponse:
     incident = await service.get_case(session, incident_id)
@@ -577,6 +610,8 @@ async def case_decommission(
     incident = await service.apply_transition_request(
         session, incident_id=incident_id, action='decommission', payload=payload, actor_sub=principal.subject
     )
+    latest_event = (await service.list_case_events(session, incident.id, limit=1))[0]
+    await event_publisher.publish_incident_state_changed(session, incident=incident, incident_event=latest_event)
     _assert_org_access(principal, incident.org_id)
     await audit_log_service.append(
         session,

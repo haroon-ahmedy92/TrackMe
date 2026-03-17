@@ -32,7 +32,13 @@ class Settings(BaseModel):
     command_signing_secret: str | None = None
     command_default_ttl_minutes: int = 60
     command_max_attempts: int = 5
+    command_pending_retry_seconds: int = 300
     geofence_alert_cooldown_seconds: int = 1800
+    rules_alert_cooldown_seconds: int = 1800
+    incident_offline_threshold_minutes: int = 180
+    event_queue_claim_timeout_seconds: int = 120
+    event_queue_retry_delay_seconds: int = 30
+    event_queue_max_attempts: int = 8
     spatial_default_history_hours: int = 24
     spatial_max_history_hours: int = 168
     exports_storage_dir: str = 'backend/generated_exports'
@@ -67,8 +73,26 @@ settings.fcm_endpoint = os.getenv('FCM_ENDPOINT', settings.fcm_endpoint)
 settings.command_signing_secret = os.getenv('COMMAND_SIGNING_SECRET', settings.command_signing_secret)
 settings.command_default_ttl_minutes = int(os.getenv('COMMAND_DEFAULT_TTL_MINUTES', settings.command_default_ttl_minutes))
 settings.command_max_attempts = int(os.getenv('COMMAND_MAX_ATTEMPTS', settings.command_max_attempts))
+settings.command_pending_retry_seconds = int(
+    os.getenv('COMMAND_PENDING_RETRY_SECONDS', settings.command_pending_retry_seconds)
+)
 settings.geofence_alert_cooldown_seconds = int(
     os.getenv('GEOFENCE_ALERT_COOLDOWN_SECONDS', settings.geofence_alert_cooldown_seconds)
+)
+settings.rules_alert_cooldown_seconds = int(
+    os.getenv('RULES_ALERT_COOLDOWN_SECONDS', settings.rules_alert_cooldown_seconds)
+)
+settings.incident_offline_threshold_minutes = int(
+    os.getenv('INCIDENT_OFFLINE_THRESHOLD_MINUTES', settings.incident_offline_threshold_minutes)
+)
+settings.event_queue_claim_timeout_seconds = int(
+    os.getenv('EVENT_QUEUE_CLAIM_TIMEOUT_SECONDS', settings.event_queue_claim_timeout_seconds)
+)
+settings.event_queue_retry_delay_seconds = int(
+    os.getenv('EVENT_QUEUE_RETRY_DELAY_SECONDS', settings.event_queue_retry_delay_seconds)
+)
+settings.event_queue_max_attempts = int(
+    os.getenv('EVENT_QUEUE_MAX_ATTEMPTS', settings.event_queue_max_attempts)
 )
 settings.spatial_default_history_hours = int(
     os.getenv('SPATIAL_DEFAULT_HISTORY_HOURS', settings.spatial_default_history_hours)

@@ -82,3 +82,35 @@ class NotificationEventService:
                 payload=payload,
             ),
         )
+
+    async def create_internal_alert(
+        self,
+        session: AsyncSession,
+        *,
+        org_id: UUID,
+        template: str,
+        payload: dict,
+        device_id: UUID | None = None,
+        incident_id: UUID | None = None,
+        remote_action_id: UUID | None = None,
+        recipient_sub: str | None = None,
+    ) -> NotificationEvent:
+        record = NotificationEvent(
+            org_id=org_id,
+            incident_id=incident_id,
+            device_id=device_id,
+            remote_action_id=remote_action_id,
+            recipient_sub=recipient_sub,
+            recipient_token=None,
+            channel='internal',
+            template=template,
+            payload_json=payload,
+            status=NotificationStatus.SENT,
+            provider_message_id='internal-alert',
+            error_message=None,
+            created_at=datetime.now(timezone.utc),
+            sent_at=datetime.now(timezone.utc),
+        )
+        session.add(record)
+        await session.flush()
+        return record

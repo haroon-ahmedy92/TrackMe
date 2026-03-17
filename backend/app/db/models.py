@@ -248,6 +248,13 @@ class NotificationStatus(str, enum.Enum):
     FAILED = 'failed'
 
 
+class QueuedEventStatus(str, enum.Enum):
+    PENDING = 'pending'
+    PROCESSING = 'processing'
+    COMPLETED = 'completed'
+    FAILED = 'failed'
+
+
 class DeprovisionStatus(str, enum.Enum):
     REQUESTED = 'requested'
     COMPLETED = 'completed'
@@ -776,3 +783,49 @@ class NotificationEvent(Base):
     error_message: Mapped[str | None] = mapped_column(String(250), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class EventQueueItem(Base):
+    __tablename__ = 'event_queue_items'
+    __table_args__ = (
+        UniqueConstraint('idempotency_key', name='uq_event_queue_items_idempotency'),
+        Index('ix_event_queue_items_status_available', 'status', 'available_at'),
+        Index('ix_event_queue_items_topic_created', 'topic', 'created_at'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey('orgs.id'), nullable=True)
+    topic: Mapped[str] = mapped_column(String(120), nullable=False)
+    entity_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    entity_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    producer: Mapped[str] = mapped_column(String(120), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    payload_json: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    headers_json: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    status: Mapped[QueuedEventStatus] = mapped_column(Enum(QueuedEventStatus), nullable=False)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    locked_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    handled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_error: Mapped[str | None] = mapped_column(String(280), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RuleExecutionLock(Base):
+    __tablename__ = 'rule_execution_locks'
+    __table_args__ = (
+        UniqueConstraint('org_id', 'rule_code', 'scope_key', name='uq_rule_execution_locks_scope'),
+        Index('ix_rule_execution_locks_cooldown', 'cooldown_until'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey('orgs.id'), nullable=True)
+    rule_code: Mapped[str] = mapped_column(String(120), nullable=False)
+    scope_key: Mapped[str] = mapped_column(String(180), nullable=False)
+    last_event_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey('event_queue_items.id'), nullable=True)
+    last_triggered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    cooldown_until: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

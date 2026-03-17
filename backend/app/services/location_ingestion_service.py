@@ -25,6 +25,7 @@ class IngestionResult:
     suspicious_alerts: list[str]
     telemetry_digest_matches: bool
     integrity_status: str
+    geofence_events: list
 
 
 class LocationIngestionService:
@@ -62,6 +63,7 @@ class LocationIngestionService:
                 suspicious_alerts=[],
                 telemetry_digest_matches=bool(payload.telemetry_payload_hash),
                 integrity_status='duplicate',
+                geofence_events=[],
             )
 
         telemetry_digest_matches = self._payload_digest(payload) == (payload.telemetry_payload_hash or '')
@@ -129,6 +131,7 @@ class LocationIngestionService:
             suspicious_alerts=alerts,
             telemetry_digest_matches=telemetry_digest_matches,
             integrity_status=integrity.status,
+            geofence_events=geofence_events,
         )
 
     def _payload_digest(self, payload: LocationIngestRequest) -> str:

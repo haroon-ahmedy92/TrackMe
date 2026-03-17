@@ -231,6 +231,24 @@ class CommandQueueService:
         expired = len([action for action in actions if action.state == RemoteActionState.EXPIRED])
         return RetryDispatchResult(processed=len(actions), sent=sent, failed=failed, expired=expired)
 
+    async def expire_action(
+        self,
+        session: AsyncSession,
+        *,
+        remote_action_id: UUID,
+        reason: str,
+    ) -> RemoteAction:
+        action = (
+            await session.execute(select(RemoteAction).where(RemoteAction.id == remote_action_id))
+        ).scalar_one_or_none()
+        if action is None:
+            raise ValueError('Unknown remote_action_id')
+        now = datetime.now(timezone.utc)
+        action.state = RemoteActionState.EXPIRED
+        action.updated_at = now
+        action.last_error = reason[:250]
+        return action
+
     async def _dispatch_action(self, session: AsyncSession, action: RemoteAction) -> bool:
         now = datetime.now(timezone.utc)
         if action.delayed_until and action.delayed_until > now:
