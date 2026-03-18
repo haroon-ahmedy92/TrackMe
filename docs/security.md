@@ -53,7 +53,7 @@ Instead, the design relies on:
 - backend device records
 - enrollment state
 - device keys
-- signed telemetry placeholders
+- signed telemetry
 - incident and audit history
 
 This is safer and more compliant.
@@ -119,7 +119,7 @@ So the architecture includes signed telemetry:
 
 1. the Android app builds a telemetry payload
 2. the app computes a payload digest
-3. the app attaches a key ID and signature placeholder
+3. the app attaches a key ID, algorithm, payload hash, and signature
 4. the backend recomputes the digest
 5. the backend checks whether the device key is valid
 6. the backend checks whether the signature matches the digest
@@ -132,14 +132,15 @@ Important files:
 
 Current state:
 
-- the architecture is present
-- the cryptography is still a placeholder
+- Android uses Android Keystore-backed signing for device telemetry
+- the backend verifies asymmetric signatures against registered public keys
+- a compatibility flag still exists for the older placeholder signature mode during migration
 
-Production direction:
+Important follow-up direction:
 
-- Android Keystore-backed asymmetric signing
-- backend public-key verification
-- stronger registration and proof-of-possession
+- stronger proof-of-possession during registration
+- real hardware attestation validation
+- server-side Play Integrity verification
 
 ## Play Integrity Placeholder
 
@@ -173,6 +174,7 @@ TrackMe includes the structure for:
 - key registration
 - active key lookup
 - key rotation
+- key revocation
 - auditability of key changes
 
 Why this matters:

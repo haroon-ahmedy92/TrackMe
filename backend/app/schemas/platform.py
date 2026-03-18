@@ -84,6 +84,9 @@ class DeviceKeyRegisterRequest(BaseModel):
     key_id: str = Field(min_length=2, max_length=80)
     public_key_pem: str = Field(min_length=16)
     algorithm: str = Field(min_length=3, max_length=32)
+    is_hardware_backed: bool = False
+    attestation_format: str | None = Field(default=None, max_length=48)
+    attestation_record: str | None = Field(default=None, max_length=12000)
     rotate_existing_active: bool = True
 
 
@@ -93,6 +96,10 @@ class DeviceKeyResponse(BaseModel):
     device_id: UUID
     key_id: str
     algorithm: str
+    is_active: bool
+    is_hardware_backed: bool
+    attestation_format: str | None
+    revoked_at: datetime | None = None
     created_at: datetime
 
 
@@ -102,6 +109,14 @@ class DeviceKeyRotateRequest(BaseModel):
     key_id: str = Field(min_length=2, max_length=80)
     public_key_pem: str = Field(min_length=16)
     algorithm: str = Field(min_length=3, max_length=32)
+    is_hardware_backed: bool = False
+    attestation_format: str | None = Field(default=None, max_length=48)
+    attestation_record: str | None = Field(default=None, max_length=12000)
+
+
+class DeviceKeyRevokeRequest(BaseModel):
+    org_id: UUID
+    reason: str = Field(min_length=4, max_length=280)
 
 
 class LocationIngestRequest(BaseModel):
@@ -120,6 +135,7 @@ class LocationIngestRequest(BaseModel):
     battery_percent: int | None = Field(default=None, ge=0, le=100)
     motion_state: str | None = Field(default=None, max_length=24)
     telemetry_signature: str | None = None
+    telemetry_algorithm: str | None = Field(default=None, min_length=3, max_length=40)
     telemetry_key_id: str | None = None
     telemetry_payload_hash: str | None = Field(default=None, min_length=32, max_length=128)
     integrity_verdict: str | None = Field(default=None, max_length=64)

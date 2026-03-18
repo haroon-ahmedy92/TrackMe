@@ -34,6 +34,7 @@ class TelemetryCheckInRequest(BaseModel):
     telemetry_signature: str | None = None
     telemetry_algorithm: str | None = None
     telemetry_key_id: str | None = None
+    telemetry_payload_hash: str | None = Field(default=None, min_length=32, max_length=128)
     integrity_token: str | None = None
     signals: list[LocationSignalInput] = Field(default_factory=list)
 

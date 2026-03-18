@@ -12,6 +12,7 @@ data class CheckInRequest(
     val location: LocationTelemetryDto?,
     val integrityVerdict: String,
     val telemetrySignature: String,
+    val telemetryAlgorithm: String,
     val telemetryKeyId: String,
     val telemetryPayloadHash: String
 )
@@ -56,6 +57,9 @@ data class PairingCompleteRequestDto(
     val keyId: String,
     val publicKeyPem: String,
     val algorithm: String,
+    val isHardwareBacked: Boolean = false,
+    val attestationFormat: String? = null,
+    val attestationRecord: String? = null,
 )
 
 @Serializable
@@ -114,4 +118,7 @@ data class CommandAckRequestDto(
     val status: String,
     val errorMessage: String? = null,
     val metadata: Map<String, String> = emptyMap(),
+    val telemetrySignature: String? = null,
+    val telemetryAlgorithm: String? = null,
+    val telemetryPayloadHash: String? = null,
 )

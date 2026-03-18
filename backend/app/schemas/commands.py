@@ -68,6 +68,9 @@ class CommandAckRequest(BaseModel):
     status: RemoteActionState
     error_message: str | None = Field(default=None, max_length=250)
     metadata: dict = Field(default_factory=dict)
+    telemetry_signature: str | None = Field(default=None, max_length=2048)
+    telemetry_algorithm: str | None = Field(default=None, min_length=3, max_length=40)
+    telemetry_payload_hash: str | None = Field(default=None, min_length=32, max_length=128)
 
 
 class CommandAckResponse(BaseModel):

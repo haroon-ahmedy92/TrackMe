@@ -42,6 +42,9 @@ class PairingCompleteRequest(BaseModel):
     public_key_pem: str = Field(min_length=16)
     key_id: str = Field(min_length=2, max_length=80)
     algorithm: str = Field(min_length=3, max_length=32)
+    is_hardware_backed: bool = False
+    attestation_format: str | None = Field(default=None, max_length=48)
+    attestation_record: str | None = Field(default=None, max_length=12000)
     qr_payload: str | None = Field(default=None, max_length=512)
 
 

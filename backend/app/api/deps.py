@@ -45,7 +45,10 @@ def get_location_confidence_service() -> LocationConfidenceService:
 
 
 def get_telemetry_service() -> TelemetryService:
-    return TelemetryService(confidence_service=get_location_confidence_service())
+    return TelemetryService(
+        confidence_service=get_location_confidence_service(),
+        signed_telemetry_service=get_signed_telemetry_service(),
+    )
 
 
 def get_notification_service() -> NotificationService:

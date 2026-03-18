@@ -199,8 +199,14 @@ class OwnershipAccessService:
             public_key_pem=payload.public_key_pem,
             algorithm=payload.algorithm,
             is_active=True,
+            is_hardware_backed=payload.is_hardware_backed,
+            attestation_format=payload.attestation_format,
+            attestation_record=payload.attestation_record,
             created_at=now,
             rotated_at=None,
+            revoked_at=None,
+            revoked_reason=None,
+            last_used_at=None,
         )
         session.add(device_key)
         token.consumed_at = now
@@ -474,6 +480,7 @@ class OwnershipAccessService:
                     DeviceKey.device_id == payload.device_id,
                     DeviceKey.key_id == payload.key_id,
                     DeviceKey.is_active.is_(True),
+                    DeviceKey.revoked_at.is_(None),
                 )
             )
         ).scalar_one_or_none()

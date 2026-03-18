@@ -52,7 +52,10 @@ class EnrollmentRepositoryImpl @Inject constructor(
                         ownerSubject = request.ownerSubject,
                         keyId = keyMaterial.keyId,
                         publicKeyPem = keyMaterial.publicKeyPem,
-                        algorithm = keyMaterial.algorithm
+                        algorithm = keyMaterial.algorithm,
+                        isHardwareBacked = keyMaterial.isHardwareBacked,
+                        attestationFormat = keyMaterial.attestationFormat,
+                        attestationRecord = keyMaterial.attestationRecord,
                     )
                 )
             }.getOrNull()
@@ -73,6 +76,8 @@ class EnrollmentRepositoryImpl @Inject constructor(
             pairingMethod = request.pairingMethod.name,
             keyId = keyMaterial.keyId,
             keyAlgorithm = keyMaterial.algorithm,
+            keyHardwareBacked = keyMaterial.isHardwareBacked,
+            keyAttestationFormat = keyMaterial.attestationFormat,
             registrationState = if (backendBinding != null) {
                 RegistrationState.VERIFIED.name
             } else {
@@ -99,6 +104,8 @@ class EnrollmentRepositoryImpl @Inject constructor(
             pairingMethod = pairingMethod?.toEnumOrNull<PairingMethod>(),
             keyId = keyId,
             keyAlgorithm = keyAlgorithm,
+            keyHardwareBacked = keyHardwareBacked,
+            keyAttestationFormat = keyAttestationFormat,
             registrationState = registrationState?.toEnumOrNull<RegistrationState>()
                 ?: RegistrationState.PENDING_BACKEND_VERIFICATION
         )

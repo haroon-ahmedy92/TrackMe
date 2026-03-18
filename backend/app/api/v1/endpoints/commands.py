@@ -5,7 +5,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_audit_log_service, get_command_queue_service, get_event_publisher_service
+from app.api.deps import (
+    get_audit_log_service,
+    get_command_queue_service,
+    get_event_publisher_service,
+    get_signed_telemetry_service,
+)
 from app.core.security import Principal, Role, require_roles
 from app.db.base import get_db_session
 from app.schemas.commands import (
@@ -21,6 +26,7 @@ from app.schemas.commands import (
 from app.services.audit_log_service import AuditLogService
 from app.services.command_queue_service import CommandQueueService
 from app.services.event_publisher_service import EventPublisherService
+from app.services.signed_telemetry_service import SignedTelemetryService
 
 router = APIRouter(prefix='/commands', tags=['commands'])
 
@@ -116,8 +122,20 @@ async def acknowledge_command(
     session: AsyncSession = Depends(get_db_session),
     service: CommandQueueService = Depends(get_command_queue_service),
     event_publisher: EventPublisherService = Depends(get_event_publisher_service),
+    signed_telemetry_service: SignedTelemetryService = Depends(get_signed_telemetry_service),
     audit_log_service: AuditLogService = Depends(get_audit_log_service),
 ) -> CommandAckResponse:
+    verification = await signed_telemetry_service.verify_command_ack_request(
+        session,
+        command_id=command_id,
+        device_id=payload.device_id,
+        payload=payload,
+    )
+    if not verification.accepted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'Invalid signed command acknowledgement: {verification.reason}',
+        )
     try:
         action = await service.acknowledge_command(session, command_id, payload)
     except ValueError as exc:

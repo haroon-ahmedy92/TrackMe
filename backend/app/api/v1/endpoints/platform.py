@@ -50,6 +50,7 @@ from app.schemas.platform import (
     CaseEvidenceEntryResponse,
     DeviceClusterResponse,
     DeviceKeyRegisterRequest,
+    DeviceKeyRevokeRequest,
     DeviceKeyRotateRequest,
     DeviceKeyResponse,
     DeviceRegisterRequest,
@@ -280,6 +281,10 @@ async def register_device_key(
         device_id=key.device_id,
         key_id=key.key_id,
         algorithm=key.algorithm,
+        is_active=key.is_active,
+        is_hardware_backed=key.is_hardware_backed,
+        attestation_format=key.attestation_format,
+        revoked_at=key.revoked_at,
         created_at=key.created_at,
     )
 
@@ -310,6 +315,45 @@ async def rotate_device_key(
         device_id=key.device_id,
         key_id=key.key_id,
         algorithm=key.algorithm,
+        is_active=key.is_active,
+        is_hardware_backed=key.is_hardware_backed,
+        attestation_format=key.attestation_format,
+        revoked_at=key.revoked_at,
+        created_at=key.created_at,
+    )
+
+
+@router.post('/device-keys/{key_record_id}/revoke', response_model=DeviceKeyResponse)
+async def revoke_device_key(
+    key_record_id: UUID,
+    payload: DeviceKeyRevokeRequest,
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY)),
+    session: AsyncSession = Depends(get_db_session),
+    service: DeviceKeyService = Depends(get_device_key_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> DeviceKeyResponse:
+    _assert_org_access(principal, payload.org_id)
+    key = await service.revoke_key(session, org_id=payload.org_id, key_record_id=key_record_id, payload=payload)
+    await audit_log_service.append(
+        session,
+        org_id=str(payload.org_id),
+        actor_sub=principal.subject,
+        action='DEVICE_KEY_REVOKED',
+        entity_type='device_key',
+        entity_id=str(key.id),
+        metadata={'device_id': str(key.device_id), 'key_id': key.key_id, 'reason': payload.reason},
+    )
+    await session.commit()
+    return DeviceKeyResponse(
+        key_record_id=key.id,
+        org_id=key.org_id,
+        device_id=key.device_id,
+        key_id=key.key_id,
+        algorithm=key.algorithm,
+        is_active=key.is_active,
+        is_hardware_backed=key.is_hardware_backed,
+        attestation_format=key.attestation_format,
+        revoked_at=key.revoked_at,
         created_at=key.created_at,
     )
 
@@ -326,7 +370,10 @@ async def ingest_location(
 ) -> LocationIngestResponse:
     _assert_org_access(principal, payload.org_id)
     payload = payload.model_copy(update={'idempotency_key': idempotency_key or payload.idempotency_key})
-    result = await service.ingest(session, payload)
+    try:
+        result = await service.ingest(session, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     await event_publisher.publish_location_updated(
         session,
         location_event=result.event,

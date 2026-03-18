@@ -6,11 +6,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import CheckInMode, Device, TelemetryEvent
 from app.schemas.telemetry import TelemetryCheckInRequest
 from app.services.location_confidence import LocationConfidenceService
+from app.services.signed_telemetry_service import SignedTelemetryService
 
 
 class TelemetryService:
-    def __init__(self, confidence_service: LocationConfidenceService) -> None:
+    def __init__(
+        self,
+        confidence_service: LocationConfidenceService,
+        signed_telemetry_service: SignedTelemetryService,
+    ) -> None:
         self.confidence_service = confidence_service
+        self.signed_telemetry_service = signed_telemetry_service
 
     async def record_checkin(
         self,
@@ -24,6 +30,13 @@ class TelemetryService:
             raise ValueError('Unknown device_id')
         if principal_org_id is not None and str(device.organization_id) != principal_org_id:
             raise PermissionError('Tenant access denied')
+        verification = await self.signed_telemetry_service.verify_checkin_request(
+            session=session,
+            device_id=payload.device_id,
+            payload=payload,
+        )
+        if not verification.accepted:
+            raise ValueError(f'Invalid signed telemetry payload: {verification.reason}')
 
         selected = self.confidence_service.choose_best_signal(payload.signals)
 
@@ -35,6 +48,8 @@ class TelemetryService:
             telemetry_signature=payload.telemetry_signature,
             telemetry_algorithm=payload.telemetry_algorithm,
             telemetry_key_id=payload.telemetry_key_id,
+            telemetry_payload_hash=payload.telemetry_payload_hash,
+            telemetry_verification_reason=verification.reason,
             integrity_token=payload.integrity_token,
             is_approximate=selected.signal.is_approximate if selected else False,
             confidence_score=selected.confidence_score if selected else None,

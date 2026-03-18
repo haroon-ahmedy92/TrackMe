@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import hashlib
-import json
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,14 +64,14 @@ class LocationIngestionService:
                 geofence_events=[],
             )
 
-        telemetry_digest_matches = self._payload_digest(payload) == (payload.telemetry_payload_hash or '')
-        verification = await self.signed_telemetry_service.verify_placeholder(
+        verification = await self.signed_telemetry_service.verify_location_request(
             session=session,
             device_id=payload.device_id,
-            telemetry_signature=payload.telemetry_signature,
-            telemetry_key_id=payload.telemetry_key_id,
-            telemetry_payload_hash=payload.telemetry_payload_hash,
+            payload=payload,
         )
+        if not verification.accepted:
+            raise ValueError(f'Invalid signed telemetry payload: {verification.reason}')
+        telemetry_digest_matches = verification.digest_matches
         telemetry_verified = verification.verified and telemetry_digest_matches
         integrity = self.integrity_verification_service.assess(payload.integrity_verdict)
         ip = await self.ip_enrichment_service.approximate(payload.ip_address)
@@ -111,8 +109,11 @@ class LocationIngestionService:
             ip_accuracy_km=ip.accuracy_km,
             is_ip_approximate=ip.is_approximate,
             telemetry_signature=payload.telemetry_signature,
+            telemetry_algorithm=payload.telemetry_algorithm,
             telemetry_key_id=payload.telemetry_key_id,
+            telemetry_payload_hash=payload.telemetry_payload_hash,
             telemetry_verified=telemetry_verified,
+            telemetry_verification_reason=verification.reason,
             integrity_verdict=(payload.integrity_verdict or integrity.status)[:64],
             location_geom=(
                 func.ST_SetSRID(func.ST_MakePoint(payload.longitude, payload.latitude), 4326)
@@ -133,28 +134,6 @@ class LocationIngestionService:
             integrity_status=integrity.status,
             geofence_events=geofence_events,
         )
-
-    def _payload_digest(self, payload: LocationIngestRequest) -> str:
-        digest_fields = {
-            'org_id': str(payload.org_id),
-            'device_id': str(payload.device_id),
-            'mode': payload.mode.value,
-            'idempotency_key': payload.idempotency_key,
-            'captured_at': payload.captured_at.isoformat(),
-            'latitude': payload.latitude,
-            'longitude': payload.longitude,
-            'accuracy_meters': payload.accuracy_meters,
-            'precision': payload.precision.value,
-            'confidence_score': payload.confidence_score,
-            'source_methods': payload.source_methods,
-            'network_type': payload.network_type,
-            'battery_percent': payload.battery_percent,
-            'motion_state': payload.motion_state,
-            'integrity_verdict': payload.integrity_verdict,
-            'ip_address': payload.ip_address,
-        }
-        canonical = json.dumps(digest_fields, sort_keys=True, separators=(',', ':'))
-        return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
     def _build_alerts(
         self,

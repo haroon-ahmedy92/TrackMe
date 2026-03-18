@@ -1,6 +1,7 @@
 package com.example.trackme.data.repository
 
 import com.example.trackme.core.TimeProvider
+import com.example.trackme.core.TelemetrySigner
 import com.example.trackme.data.local.dao.DeviceCommandDao
 import com.example.trackme.data.local.dao.EnrollmentDao
 import com.example.trackme.data.local.entity.DeviceCommandEntity
@@ -20,8 +21,10 @@ import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.Serializable
 import java.time.Instant
 
 @Singleton
@@ -31,6 +34,7 @@ class CommandRepositoryImpl @Inject constructor(
     private val recoveryApi: RecoveryApi,
     private val json: Json,
     private val timeProvider: TimeProvider,
+    private val telemetrySigner: TelemetrySigner,
 ) : CommandRepository {
 
     override fun observeCommands(): Flow<List<DeviceCommand>> {
@@ -74,19 +78,19 @@ class CommandRepositoryImpl @Inject constructor(
             )
         )
         pending.forEach { command ->
+            val signedRequest = signAcknowledgement(
+                enrollment = enrollment,
+                commandId = command.commandId,
+                status = command.status.lowercase(),
+                errorMessage = command.lastError,
+                metadata = buildMap {
+                    command.executedAtEpochMs?.let { put("executedAtEpochMs", it.toString()) }
+                    command.deliveredAtEpochMs?.let { put("deliveredAtEpochMs", it.toString()) }
+                },
+            )
             recoveryApi.acknowledgeCommand(
                 commandId = command.commandId,
-                request = CommandAckRequestDto(
-                    orgId = enrollment.orgId,
-                    deviceId = enrollment.deviceId,
-                    keyId = enrollment.keyId,
-                    status = command.status.lowercase(),
-                    errorMessage = command.lastError,
-                    metadata = buildMap {
-                        command.executedAtEpochMs?.let { put("executedAtEpochMs", it.toString()) }
-                        command.deliveredAtEpochMs?.let { put("deliveredAtEpochMs", it.toString()) }
-                    },
-                )
+                request = signedRequest,
             )
             commandDao.updateServerAcknowledged(command.commandId, true)
         }
@@ -124,18 +128,51 @@ class CommandRepositoryImpl @Inject constructor(
     ) {
         updateLocalStatus(commandId, status, lastError)
         val enrollment = enrollmentDao.observeById().firstOrNullEnrolled() ?: return
+        val request = signAcknowledgement(
+            enrollment = enrollment,
+            commandId = commandId,
+            status = status.name.lowercase(),
+            errorMessage = lastError,
+            metadata = metadata,
+        )
         recoveryApi.acknowledgeCommand(
             commandId = commandId,
-            request = CommandAckRequestDto(
-                orgId = enrollment.orgId,
-                deviceId = enrollment.deviceId,
-                keyId = enrollment.keyId,
-                status = status.name.lowercase(),
-                errorMessage = lastError,
-                metadata = metadata,
-            )
+            request = request,
         )
         commandDao.updateServerAcknowledged(commandId, true)
+    }
+
+    private fun signAcknowledgement(
+        enrollment: EnrollmentIdentity,
+        commandId: String,
+        status: String,
+        errorMessage: String?,
+        metadata: Map<String, String>,
+    ): CommandAckRequestDto {
+        val unsignedPayload = SignedCommandAckPayload(
+            commandId = commandId,
+            orgId = enrollment.orgId,
+            deviceId = enrollment.deviceId,
+            keyId = enrollment.keyId,
+            status = status,
+            errorMessage = errorMessage,
+            metadata = metadata,
+        )
+        val signedPayload = telemetrySigner.sign(
+            json.encodeToString(SignedCommandAckPayload.serializer(), unsignedPayload),
+            enrollment.keyId,
+        )
+        return CommandAckRequestDto(
+            orgId = enrollment.orgId,
+            deviceId = enrollment.deviceId,
+            keyId = enrollment.keyId,
+            status = status,
+            errorMessage = errorMessage,
+            metadata = metadata,
+            telemetrySignature = signedPayload.signature,
+            telemetryAlgorithm = signedPayload.algorithm,
+            telemetryPayloadHash = signedPayload.payloadHash,
+        )
     }
 
     private fun CommandEnvelopeDto.toEntity(receivedAtEpochMs: Long): DeviceCommandEntity {
@@ -206,6 +243,17 @@ private data class EnrollmentIdentity(
     val orgId: String,
     val deviceId: String,
     val keyId: String,
+)
+
+@Serializable
+private data class SignedCommandAckPayload(
+    val commandId: String,
+    val orgId: String,
+    val deviceId: String,
+    val keyId: String,
+    val status: String,
+    val errorMessage: String? = null,
+    val metadata: Map<String, String> = emptyMap(),
 )
 
 private suspend fun Flow<EnrollmentEntity?>.firstOrNullEnrolled(): EnrollmentIdentity? {

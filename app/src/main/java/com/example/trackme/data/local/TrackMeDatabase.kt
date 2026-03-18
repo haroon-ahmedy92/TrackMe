@@ -35,7 +35,7 @@ import com.example.trackme.data.local.entity.TelemetryQueueEntity
         IncidentEvidenceExportEntity::class,
         TelemetryQueueEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class TrackMeDatabase : RoomDatabase() {

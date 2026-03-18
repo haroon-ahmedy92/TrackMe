@@ -130,7 +130,9 @@ private class FakeVerifiedEnrollmentDao : EnrollmentDao {
             authorizationRole = "OWNER",
             pairingMethod = "ENROLLMENT_TOKEN",
             keyId = "device-key-1",
-            keyAlgorithm = "RSA",
+            keyAlgorithm = "SHA256withECDSA",
+            keyHardwareBacked = false,
+            keyAttestationFormat = "android_keystore_x509_chain",
             registrationState = "VERIFIED",
         )
     )

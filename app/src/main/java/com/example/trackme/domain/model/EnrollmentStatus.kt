@@ -15,5 +15,7 @@ data class EnrollmentStatus(
     val pairingMethod: PairingMethod? = null,
     val keyId: String? = null,
     val keyAlgorithm: String? = null,
+    val keyHardwareBacked: Boolean? = null,
+    val keyAttestationFormat: String? = null,
     val registrationState: RegistrationState = RegistrationState.PENDING_BACKEND_VERIFICATION
 )

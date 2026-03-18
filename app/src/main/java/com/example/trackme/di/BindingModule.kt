@@ -10,7 +10,7 @@ import com.example.trackme.commands.RemoteCommandProcessor
 import com.example.trackme.commands.UseCaseLostModeCommandExecutor
 import com.example.trackme.compliance.CompliancePolicy
 import com.example.trackme.compliance.DefaultCompliancePolicy
-import com.example.trackme.core.HashTelemetrySigner
+import com.example.trackme.core.KeystoreTelemetrySigner
 import com.example.trackme.core.TelemetrySigner
 import com.example.trackme.core.security.AndroidKeystoreDeviceKeyMaterialGenerator
 import com.example.trackme.core.security.DeviceKeyMaterialGenerator
@@ -194,7 +194,7 @@ abstract class BindingModule {
 
     @Binds
     @Singleton
-    abstract fun bindTelemetrySigner(impl: HashTelemetrySigner): TelemetrySigner
+    abstract fun bindTelemetrySigner(impl: KeystoreTelemetrySigner): TelemetrySigner
 
     @Binds
     @Singleton

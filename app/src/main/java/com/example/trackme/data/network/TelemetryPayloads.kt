@@ -32,6 +32,7 @@ data class PlatformLocationIngestRequestDto(
     @SerialName("battery_percent") val batteryPercent: Int? = null,
     @SerialName("motion_state") val motionState: String? = null,
     @SerialName("telemetry_signature") val telemetrySignature: String? = null,
+    @SerialName("telemetry_algorithm") val telemetryAlgorithm: String? = null,
     @SerialName("telemetry_key_id") val telemetryKeyId: String? = null,
     @SerialName("telemetry_payload_hash") val telemetryPayloadHash: String? = null,
     @SerialName("integrity_verdict") val integrityVerdict: String? = null,

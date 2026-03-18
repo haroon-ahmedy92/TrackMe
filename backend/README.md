@@ -15,7 +15,7 @@ Lawful, consent-based backend for owner-enrolled or organization-managed Android
 1. Auth/identity integration placeholders (`/platform/identity/me`)
 2. Device registry service (`/platform/devices`)
 3. Ownership/enrollment service (`/platform/enrollments`)
-4. Location ingestion API with idempotency + signed telemetry placeholder (`/platform/locations/ingest`)
+4. Location ingestion API with idempotency + signed telemetry verification (`/platform/locations/ingest`)
 5. Incident/case management service (`/platform/cases/...`)
 6. Rules engine service (`/platform/rules/evaluate`)
 7. Audit log service (`/platform/audit-logs`)
@@ -75,8 +75,9 @@ Initial migration:
 ## Security and Compliance Notes
 - No covert endpoints for hidden capture/surveillance.
 - Remote wipe requires elevated confirmation + tradeoff acknowledgement in business rules.
-- Telemetry verification currently uses a placeholder deterministic signature shape (`SHA256(key_id:payload_hash)`), with key-registration checks and payload digest checks. Replace with asymmetric Android Keystore signatures before production.
-- Device key lifecycle supports key registration + active-key rotation (`/platform/device-keys`, `/platform/device-keys/rotate`).
+- Telemetry verification supports Android Keystore-backed asymmetric signatures over canonical payload hashes, with an explicit optional/required policy mode.
+- A temporary compatibility path still exists for the older placeholder signature format when `ALLOW_PLACEHOLDER_SIGNED_TELEMETRY=true`.
+- Device key lifecycle supports key registration, active-key rotation, and revocation (`/platform/device-keys`, `/platform/device-keys/rotate`, `/platform/device-keys/{key_record_id}/revoke`).
 - Play Integrity is currently a classification placeholder (`IntegrityVerificationService`) and must be replaced with server-side token verification.
 - JWT defaults to verified decode when `JWT_SHARED_SECRET` is configured. Insecure unverified token mode is allowed only when explicitly enabled for development.
 - Rate limiting middleware is in-memory (swap to Redis-backed limiter in multi-node production).

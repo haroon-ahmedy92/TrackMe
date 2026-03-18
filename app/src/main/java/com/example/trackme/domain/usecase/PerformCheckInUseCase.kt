@@ -78,6 +78,9 @@ class PerformCheckInUseCase @Inject constructor(
 
         deviceStateRepository.updateCheckIn(mode = mode, batteryPercent = batteryPercent, checkInAtEpochMs = now)
 
+        val staleAgeMinutes = locationSnapshot
+            ?.let { ((now - it.capturedAtEpochMs).coerceAtLeast(0L)) / 60_000L }
+        val staleData = staleAgeMinutes != null && staleAgeMinutes * 60_000L > mode.staleAfterMillis()
         val telemetryPayload = CheckInTelemetryPayload(
             mode = mode.name,
             source = source,
@@ -87,11 +90,10 @@ class PerformCheckInUseCase @Inject constructor(
             location = locationSnapshot?.toTelemetryDto(),
             integrityVerdict = integrityVerdict
         )
-        val telemetryPayloadJson = json.encodeToString(telemetryPayload)
-        val signedPayload = telemetrySigner.sign(telemetryPayloadJson, enrollment.keyId)
-        val staleAgeMinutes = locationSnapshot
-            ?.let { ((now - it.capturedAtEpochMs).coerceAtLeast(0L)) / 60_000L }
-        val staleData = staleAgeMinutes != null && staleAgeMinutes * 60_000L > mode.staleAfterMillis()
+        val auditSignedPayload = telemetrySigner.sign(
+            json.encodeToString(telemetryPayload),
+            enrollment.keyId,
+        )
 
         val metadata = buildMap<String, String> {
             put("mode", mode.name)
@@ -113,18 +115,18 @@ class PerformCheckInUseCase @Inject constructor(
             }
             put("integrityVerdict", integrityVerdict)
             put("integrityTokenPresent", (!integrityToken.isNullOrBlank()).toString())
-            put("telemetryPayloadJson", telemetryPayloadJson)
+            put("telemetryPayloadJson", json.encodeToString(telemetryPayload))
         }
 
         val canQueueForBackend = !enrollment.orgId.isNullOrBlank() &&
             !enrollment.deviceId.isNullOrBlank() &&
             !enrollment.keyId.isNullOrBlank()
         if (canQueueForBackend) {
-            val request = PlatformLocationIngestRequestDto(
+            val unsignedRequest = PlatformLocationIngestRequestDto(
                 orgId = requireNotNull(enrollment.orgId),
                 deviceId = requireNotNull(enrollment.deviceId),
                 mode = mode.toApiValue(),
-                idempotencyKey = "loc-${signedPayload.payloadHash.take(20)}-$now",
+                idempotencyKey = "loc-$now-${mode.name.lowercase()}",
                 capturedAt = Instant.ofEpochMilli(locationSnapshot?.capturedAtEpochMs ?: now).toString(),
                 capturedAtEpochMs = locationSnapshot?.capturedAtEpochMs ?: now,
                 latitude = locationSnapshot?.latitude,
@@ -141,10 +143,18 @@ class PerformCheckInUseCase @Inject constructor(
                 networkType = locationSnapshot?.networkType?.name?.lowercase(),
                 batteryPercent = batteryPercent,
                 motionState = locationSnapshot?.motionState?.name?.lowercase(),
+                integrityVerdict = integrityVerdict,
+            )
+            val signedPayload = telemetrySigner.sign(
+                json.encodeToString(unsignedRequest),
+                enrollment.keyId,
+            )
+            val request = unsignedRequest.copy(
+                idempotencyKey = "loc-${signedPayload.payloadHash.take(20)}-$now",
                 telemetrySignature = signedPayload.signature,
+                telemetryAlgorithm = signedPayload.algorithm,
                 telemetryKeyId = signedPayload.keyId,
                 telemetryPayloadHash = signedPayload.payloadHash,
-                integrityVerdict = integrityVerdict,
             )
             telemetrySyncRepository.enqueue(request)
             telemetrySyncScheduler.scheduleImmediateSync()
@@ -164,10 +174,10 @@ class PerformCheckInUseCase @Inject constructor(
             type = "CHECKIN_RECORDED",
             summary = "Device check-in captured",
             metadata = metadata + mapOf(
-                "telemetrySignature" to signedPayload.signature,
-                "telemetryAlgorithm" to signedPayload.algorithm,
-                "telemetryKeyId" to signedPayload.keyId,
-                "telemetryPayloadHash" to signedPayload.payloadHash
+                "telemetrySignature" to auditSignedPayload.signature,
+                "telemetryAlgorithm" to auditSignedPayload.algorithm,
+                "telemetryKeyId" to auditSignedPayload.keyId,
+                "telemetryPayloadHash" to auditSignedPayload.payloadHash
             )
         )
     }

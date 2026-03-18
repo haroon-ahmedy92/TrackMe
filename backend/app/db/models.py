@@ -107,6 +107,8 @@ class TelemetryEvent(Base):
     telemetry_signature: Mapped[str | None] = mapped_column(String(128), nullable=True)
     telemetry_algorithm: Mapped[str | None] = mapped_column(String(32), nullable=True)
     telemetry_key_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    telemetry_payload_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    telemetry_verification_reason: Mapped[str | None] = mapped_column(String(80), nullable=True)
     integrity_token: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     device: Mapped[Device] = relationship(back_populates='telemetry_events')
@@ -346,8 +348,14 @@ class DeviceKey(Base):
     public_key_pem: Mapped[str] = mapped_column(Text, nullable=False)
     algorithm: Mapped[str] = mapped_column(String(32), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_hardware_backed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    attestation_format: Mapped[str | None] = mapped_column(String(48), nullable=True)
+    attestation_record: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     rotated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_reason: Mapped[str | None] = mapped_column(String(280), nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class DeviceOwnershipBinding(Base):
@@ -482,8 +490,11 @@ class LocationEvent(Base):
     ip_accuracy_km: Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
     is_ip_approximate: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     telemetry_signature: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    telemetry_algorithm: Mapped[str | None] = mapped_column(String(40), nullable=True)
     telemetry_key_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    telemetry_payload_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     telemetry_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    telemetry_verification_reason: Mapped[str | None] = mapped_column(String(80), nullable=True)
     integrity_verdict: Mapped[str | None] = mapped_column(String(64), nullable=True)
     location_geom: Mapped[str | None] = mapped_column(Geometry(geometry_type='POINT', srid=4326), nullable=True)
 

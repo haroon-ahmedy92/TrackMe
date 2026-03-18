@@ -119,13 +119,26 @@ private class FakeEnrollmentDao : EnrollmentDao {
 }
 
 private class FakeDeviceKeyMaterialGenerator : DeviceKeyMaterialGenerator {
+    override fun load(keyId: String): DeviceKeyMaterial? = null
+
     override fun generateOrLoad(aliasSeed: String): DeviceKeyMaterial {
         return DeviceKeyMaterial(
             keyId = "trackme-test-key",
             publicKeyPem = "-----BEGIN PUBLIC KEY-----\nTEST\n-----END PUBLIC KEY-----",
-            algorithm = "RSA"
+            algorithm = "SHA256withECDSA",
+            isHardwareBacked = false,
+            attestationFormat = "android_keystore_x509_chain",
+            attestationRecord = "-----BEGIN CERTIFICATE-----\nTEST\n-----END CERTIFICATE-----",
         )
     }
+
+    override fun rotate(aliasSeed: String): DeviceKeyMaterial = generateOrLoad(aliasSeed)
+
+    override fun signPayloadHash(keyId: String, payloadHash: String) = com.example.trackme.core.security.DeviceKeySignature(
+        keyId = keyId,
+        algorithm = "SHA256withECDSA",
+        signature = "signed-$payloadHash",
+    )
 }
 
 private class FakeTimeProvider : TimeProvider {

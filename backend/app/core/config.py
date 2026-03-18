@@ -33,6 +33,8 @@ class Settings(BaseModel):
     command_default_ttl_minutes: int = 60
     command_max_attempts: int = 5
     command_pending_retry_seconds: int = 300
+    signed_telemetry_mode: str = 'optional'
+    allow_placeholder_signed_telemetry: bool = True
     geofence_alert_cooldown_seconds: int = 1800
     rules_alert_cooldown_seconds: int = 1800
     incident_offline_threshold_minutes: int = 180
@@ -76,6 +78,11 @@ settings.command_max_attempts = int(os.getenv('COMMAND_MAX_ATTEMPTS', settings.c
 settings.command_pending_retry_seconds = int(
     os.getenv('COMMAND_PENDING_RETRY_SECONDS', settings.command_pending_retry_seconds)
 )
+settings.signed_telemetry_mode = os.getenv('SIGNED_TELEMETRY_MODE', settings.signed_telemetry_mode).lower()
+settings.allow_placeholder_signed_telemetry = os.getenv(
+    'ALLOW_PLACEHOLDER_SIGNED_TELEMETRY',
+    'true' if settings.allow_placeholder_signed_telemetry else 'false',
+).lower() == 'true'
 settings.geofence_alert_cooldown_seconds = int(
     os.getenv('GEOFENCE_ALERT_COOLDOWN_SECONDS', settings.geofence_alert_cooldown_seconds)
 )

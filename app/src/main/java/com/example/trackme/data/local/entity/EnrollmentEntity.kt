@@ -20,6 +20,8 @@ data class EnrollmentEntity(
     val pairingMethod: String?,
     val keyId: String?,
     val keyAlgorithm: String?,
+    val keyHardwareBacked: Boolean?,
+    val keyAttestationFormat: String?,
     val registrationState: String?
 ) {
     companion object {

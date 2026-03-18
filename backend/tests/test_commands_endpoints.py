@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-from app.api.deps import get_audit_log_service, get_command_queue_service
+from app.api.deps import get_audit_log_service, get_command_queue_service, get_signed_telemetry_service
 from app.core.security import Principal, Role, get_current_principal
 from app.db.models import RemoteActionKind, RemoteActionState
 from app.main import app
@@ -118,6 +118,15 @@ def _override_principal(subject: str, roles: list[Role], org_id: str):
     return lambda: Principal(subject=subject, roles=set(roles), organization_id=org_id)
 
 
+class FakeSignedTelemetryService:
+    def __init__(self, *, accepted: bool, reason: str = 'verified') -> None:
+        self.accepted = accepted
+        self.reason = reason
+
+    async def verify_command_ack_request(self, session, *, command_id, device_id, payload):
+        return SimpleNamespace(accepted=self.accepted, reason=self.reason)
+
+
 def test_queue_command_endpoint_audits_sensitive_action() -> None:
     fake_service = FakeCommandQueueService()
     audit_service = FakeAuditLogService()
@@ -196,3 +205,34 @@ def test_ack_endpoint_records_audit_entry() -> None:
 
     assert response.status_code == 200
     assert 'COMMAND_ACKED_RECORDED' in audit_service.actions
+
+
+def test_ack_endpoint_rejects_invalid_signed_acknowledgement() -> None:
+    fake_service = FakeCommandQueueService()
+    from app.db.base import get_db_session
+    app.dependency_overrides[get_command_queue_service] = lambda: fake_service
+    app.dependency_overrides[get_signed_telemetry_service] = lambda: FakeSignedTelemetryService(
+        accepted=False,
+        reason='signature_mismatch',
+    )
+    app.dependency_overrides[get_db_session] = _dummy_db_session
+    try:
+        client = TestClient(app)
+        response = client.post(
+            f'/api/v1/commands/{fake_service.command_id}/ack',
+            json={
+                'org_id': str(fake_service.org_id),
+                'device_id': str(fake_service.device_id),
+                'key_id': 'trackme-device-key',
+                'status': 'acked',
+                'metadata': {'executedAtEpochMs': '1710410000000'},
+                'telemetry_signature': 'invalid',
+                'telemetry_algorithm': 'SHA256withECDSA',
+                'telemetry_payload_hash': 'a' * 64,
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert response.json()['detail'] == 'Invalid signed command acknowledgement: signature_mismatch'
