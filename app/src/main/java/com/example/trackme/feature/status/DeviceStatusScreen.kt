@@ -15,6 +15,7 @@ import com.example.trackme.feature.common.MetricRow
 import com.example.trackme.feature.common.SectionCard
 import com.example.trackme.feature.common.StatusChip
 import com.example.trackme.feature.common.TrackMeScreen
+import com.example.trackme.trust.DeviceTrustStatus
 import com.example.trackme.ui.common.formatEpochMillis
 
 @Composable
@@ -52,6 +53,51 @@ fun DeviceStatusScreen(
                     MetricRow(label = "Pairing method", value = dashboard.enrollment.pairingMethod?.name?.replace('_', ' ') ?: "-")
                     MetricRow(label = "Registration state", value = dashboard.enrollment.registrationState.name.replace('_', ' '))
                     MetricRow(label = "Lost mode until", value = formatEpochMillis(dashboard.deviceState.lostModeUntilEpochMs))
+                }
+
+                SectionCard(
+                    title = "Device trust signals",
+                    eyebrow = "Advisory"
+                ) {
+                    val trust = dashboard.trustSummary
+                    ChipRow(
+                        {
+                            StatusChip(
+                                label = when (trust.status) {
+                                    DeviceTrustStatus.TRUSTED -> "Trusted signals"
+                                    DeviceTrustStatus.CAUTION -> "Needs review"
+                                    DeviceTrustStatus.UNAVAILABLE -> "Signals limited"
+                                },
+                                containerColor = when (trust.status) {
+                                    DeviceTrustStatus.TRUSTED -> MaterialTheme.colorScheme.primaryContainer
+                                    DeviceTrustStatus.CAUTION -> MaterialTheme.colorScheme.tertiaryContainer
+                                    DeviceTrustStatus.UNAVAILABLE -> MaterialTheme.colorScheme.surfaceVariant
+                                },
+                                contentColor = when (trust.status) {
+                                    DeviceTrustStatus.TRUSTED -> MaterialTheme.colorScheme.onPrimaryContainer
+                                    DeviceTrustStatus.CAUTION -> MaterialTheme.colorScheme.onTertiaryContainer
+                                    DeviceTrustStatus.UNAVAILABLE -> MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        },
+                        {
+                            StatusChip(
+                                label = if (trust.integrityTrusted) "Integrity placeholder trusted" else "Integrity limited",
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                    )
+                    MetricRow(label = "Summary", value = trust.headline, emphasize = true)
+                    MetricRow(label = "Details", value = trust.details)
+                    MetricRow(label = "Root suspicion placeholder", value = if (trust.rootSuspicion) "Observed" else "Not observed")
+                    MetricRow(label = "Mock location heuristic", value = if (trust.mockLocationSuspicion) "Observed" else "Not observed")
+                    MetricRow(label = "Debuggable app flag", value = if (trust.debuggableApp) "Observed" else "Not observed")
+                    MetricRow(label = "Hardware-backed key", value = if (trust.keyHardwareBacked) "Declared" else "Not declared")
+                    MetricRow(
+                        label = "Reasons",
+                        value = if (trust.reasons.isEmpty()) "No additional caution reasons captured" else trust.reasons.joinToString()
+                    )
                 }
 
                 SectionCard(

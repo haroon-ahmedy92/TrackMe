@@ -11,7 +11,24 @@ data class CheckInTelemetryPayload(
     val batteryPercent: Int?,
     val lowBatteryOptimizationApplied: Boolean,
     val location: LocationTelemetryDto?,
-    val integrityVerdict: String
+    val integrityVerdict: String,
+    val trustSignals: TrustTelemetryDto? = null,
+)
+
+@Serializable
+data class TrustTelemetryDto(
+    @SerialName("device_trust_status") val deviceTrustStatus: String,
+    @SerialName("device_trust_summary") val deviceTrustSummary: String,
+    @SerialName("device_trust_reasons") val deviceTrustReasons: List<String> = emptyList(),
+    @SerialName("integrity_status") val integrityStatus: String,
+    @SerialName("integrity_trusted") val integrityTrusted: Boolean,
+    @SerialName("integrity_token_present") val integrityTokenPresent: Boolean,
+    @SerialName("app_debug_build") val appDebugBuild: Boolean,
+    @SerialName("app_debuggable") val appDebuggable: Boolean,
+    @SerialName("root_suspicion") val rootSuspicion: Boolean,
+    @SerialName("mock_location_suspicion") val mockLocationSuspicion: Boolean,
+    @SerialName("key_hardware_backed") val keyHardwareBacked: Boolean,
+    @SerialName("attestation_declared") val attestationDeclared: Boolean,
 )
 
 @Serializable
@@ -31,6 +48,7 @@ data class PlatformLocationIngestRequestDto(
     @SerialName("network_type") val networkType: String? = null,
     @SerialName("battery_percent") val batteryPercent: Int? = null,
     @SerialName("motion_state") val motionState: String? = null,
+    @SerialName("trust_signals") val trustSignals: TrustTelemetryDto? = null,
     @SerialName("telemetry_signature") val telemetrySignature: String? = null,
     @SerialName("telemetry_algorithm") val telemetryAlgorithm: String? = null,
     @SerialName("telemetry_key_id") val telemetryKeyId: String? = null,

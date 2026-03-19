@@ -15,6 +15,19 @@ export type RemoteActionType = 'LOCK' | 'WIPE' | 'PLAY_SOUND' | 'SHOW_RECOVERY_M
 export type RemoteActionStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'DISPATCHED' | 'EXECUTED' | 'FAILED';
 
 export type Role = 'owner' | 'admin' | 'security';
+export type DeviceTrustStatus = 'trusted' | 'caution' | 'unavailable';
+
+export interface DeviceTrustRecord {
+  status: DeviceTrustStatus;
+  summary: string;
+  reasons: string[];
+  integrityStatus?: string;
+  rootSuspicion: boolean;
+  debugSuspicion: boolean;
+  mockLocationSuspicion: boolean;
+  trustedTelemetrySeen: boolean;
+  observedAt?: string;
+}
 
 export interface OwnershipBindingRecord {
   id: string;
@@ -72,6 +85,7 @@ export interface DeviceRecord {
   enrollmentDate: string;
   managedNoticeVisible: boolean;
   location: LocationSnapshot;
+  trust?: DeviceTrustRecord;
 }
 
 export interface IncidentRecord {

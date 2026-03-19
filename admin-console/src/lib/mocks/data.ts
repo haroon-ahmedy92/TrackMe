@@ -43,6 +43,17 @@ export const mockDevices: DeviceRecord[] = [
       sourceLabel: 'Fused GPS + geofence',
       notes: 'High confidence from recent GNSS fix.'
     },
+    trust: {
+      status: 'trusted',
+      summary: 'Signed telemetry and current advisory signals look consistent.',
+      reasons: [],
+      integrityStatus: 'trusted_placeholder',
+      rootSuspicion: false,
+      debugSuspicion: false,
+      mockLocationSuspicion: false,
+      trustedTelemetrySeen: true,
+      observedAt: '2026-03-10T08:29:45Z',
+    },
   },
   {
     id: 'dev-002',
@@ -68,6 +79,17 @@ export const mockDevices: DeviceRecord[] = [
       sourceLabel: 'Last known fused location + network context',
       notes: 'Signal age increased due to intermittent connectivity.'
     },
+    trust: {
+      status: 'caution',
+      summary: 'Advisory trust signals suggest operator review. This is not proof of compromise.',
+      reasons: ['MOCK_LOCATION_HEURISTIC', 'BACKEND_INTEGRITY_UNAVAILABLE'],
+      integrityStatus: 'unavailable',
+      rootSuspicion: false,
+      debugSuspicion: false,
+      mockLocationSuspicion: true,
+      trustedTelemetrySeen: false,
+      observedAt: '2026-03-09T22:05:05Z',
+    },
   },
   {
     id: 'dev-003',
@@ -92,6 +114,17 @@ export const mockDevices: DeviceRecord[] = [
       collectedAt: '2026-03-08T16:40:00Z',
       sourceLabel: 'Backend IP geolocation fallback',
       notes: 'Approximate district-level signal only. Not exact recovery location.'
+    },
+    trust: {
+      status: 'unavailable',
+      summary: 'Trust-signal coverage is limited. Treat this as unknown rather than safe or compromised.',
+      reasons: ['BACKEND_INTEGRITY_UNAVAILABLE'],
+      integrityStatus: 'unavailable',
+      rootSuspicion: false,
+      debugSuspicion: false,
+      mockLocationSuspicion: false,
+      trustedTelemetrySeen: false,
+      observedAt: '2026-03-08T16:40:05Z',
     },
   },
 ];

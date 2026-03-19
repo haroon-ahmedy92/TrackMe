@@ -4,6 +4,7 @@ import { ConfidenceBadge } from '@/components/common/ConfidenceBadge';
 import { LoadingCard } from '@/components/common/LoadingCard';
 import { LocationPrecisionBadge } from '@/components/common/LocationPrecisionBadge';
 import { SensitiveActionModal } from '@/components/common/SensitiveActionModal';
+import { TrustStatusBadge } from '@/components/common/TrustStatusBadge';
 import { GeoSignalMap } from '@/components/maps/GeoSignalMap';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -26,16 +27,17 @@ export default function DeviceDetailsPage() {
 
   const state = useAsyncData(
     async () => {
-      const [device, binding, lastKnownLocation, locationHistory, geofenceEvents, geofences, accessHistory] = await Promise.all([
+      const [device, binding, trust, lastKnownLocation, locationHistory, geofenceEvents, geofences, accessHistory] = await Promise.all([
         apiClient.getDeviceById(deviceId),
         apiClient.getDeviceBinding(deviceId),
+        apiClient.getDeviceTrustStatus(deviceId),
         apiClient.getLastKnownLocation(deviceId),
         apiClient.getLocationHistory(deviceId, Number(windowHours)),
         apiClient.getGeofenceEvents(deviceId, Number(windowHours)),
         apiClient.getGeofences(),
         apiClient.getDeviceAccessHistory(deviceId),
       ]);
-      return { device, binding, lastKnownLocation, locationHistory, geofenceEvents, geofences, accessHistory };
+      return { device, binding, trust, lastKnownLocation, locationHistory, geofenceEvents, geofences, accessHistory };
     },
     [deviceId, windowHours],
   );
@@ -62,7 +64,7 @@ export default function DeviceDetailsPage() {
     );
   }
 
-  const { device, binding, lastKnownLocation, locationHistory, geofenceEvents, geofences, accessHistory } = state.data;
+  const { device, binding, trust, lastKnownLocation, locationHistory, geofenceEvents, geofences, accessHistory } = state.data;
   const deviceGeofences = geofences.filter((geofence) => geofence.deviceId === device.id);
 
   const locateDevice = async (reason: string) => {
@@ -158,7 +160,61 @@ export default function DeviceDetailsPage() {
             Managed notice visible: {device.managedNoticeVisible ? 'Yes' : 'No'}
           </p>
         </Card>
+
+        <Card>
+          <p className="text-muted" style={{ margin: 0 }}>
+            Advisory trust state
+          </p>
+          <div style={{ marginTop: 10 }}>
+            <TrustStatusBadge trust={trust} />
+          </div>
+          <p className="text-muted" style={{ marginTop: 10, fontSize: 13 }}>
+            {trust?.summary ?? 'No recent trust summary available yet.'}
+          </p>
+          {trust?.observedAt ? (
+            <p className="text-muted" style={{ marginTop: 6, fontSize: 12 }}>
+              Observed: {formatDateTime(trust.observedAt)}
+            </p>
+          ) : null}
+        </Card>
       </div>
+
+      <Card>
+        <h2 style={{ marginTop: 0, marginBottom: 8 }}>Trust signal details</h2>
+        <p className="page-subtitle">
+          These are advisory indicators only. Suspicious signals do not by themselves prove compromise.
+        </p>
+        <div className="grid-2" style={{ marginTop: 16 }}>
+          <div className="stack" style={{ gap: 8 }}>
+            <p style={{ margin: 0 }}>
+              Integrity status: <strong>{trust?.integrityStatus ?? 'Unknown'}</strong>
+            </p>
+            <p style={{ margin: 0 }}>
+              Root suspicion placeholder: <strong>{trust?.rootSuspicion ? 'Observed' : 'Not observed'}</strong>
+            </p>
+            <p style={{ margin: 0 }}>
+              Debug suspicion placeholder: <strong>{trust?.debugSuspicion ? 'Observed' : 'Not observed'}</strong>
+            </p>
+            <p style={{ margin: 0 }}>
+              Mock-location heuristic: <strong>{trust?.mockLocationSuspicion ? 'Observed' : 'Not observed'}</strong>
+            </p>
+          </div>
+          <div className="stack" style={{ gap: 8 }}>
+            <p style={{ margin: 0, fontWeight: 700 }}>Reasons</p>
+            {trust?.reasons?.length ? (
+              trust.reasons.map((reason) => (
+                <Badge key={reason} variant="neutral">
+                  {reason}
+                </Badge>
+              ))
+            ) : (
+              <p className="text-muted" style={{ margin: 0 }}>
+                No additional caution reasons captured.
+              </p>
+            )}
+          </div>
+        </div>
+      </Card>
 
       {actionError ? (
         <Card>

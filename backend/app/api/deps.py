@@ -12,6 +12,7 @@ from app.services.command_signing_service import CommandSigningService
 from app.services.compliance_service import ComplianceService
 from app.services.device_key_service import DeviceKeyService
 from app.services.device_registry_service import DeviceRegistryService
+from app.services.device_trust_service import DeviceTrustService
 from app.services.enrollment_service import EnrollmentService
 from app.services.event_consumer_worker import EventConsumerWorker, build_default_event_worker
 from app.services.event_publisher_service import EventPublisherService
@@ -96,6 +97,10 @@ def get_device_key_service() -> DeviceKeyService:
     return DeviceKeyService()
 
 
+def get_device_trust_service() -> DeviceTrustService:
+    return DeviceTrustService()
+
+
 def get_ip_enrichment_service() -> IpEnrichmentService:
     return IpEnrichmentService()
 
@@ -135,6 +140,7 @@ def get_location_ingestion_service() -> LocationIngestionService:
         ip_enrichment_service=get_ip_enrichment_service(),
         rules_engine_service=get_rules_engine_service(),
         geofence_service=get_geofence_service(),
+        device_trust_service=get_device_trust_service(),
     )
 
 

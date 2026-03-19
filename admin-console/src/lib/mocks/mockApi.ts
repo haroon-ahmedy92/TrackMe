@@ -23,6 +23,7 @@ import type {
   CaseEvidenceChainRecord,
   CaseNoteRecord,
   DeviceClusterRecord,
+  DeviceTrustRecord,
   GeofenceRecord,
   GeofenceEventRecord,
   EvidenceExportRecord,
@@ -135,6 +136,15 @@ export const mockApiClient: ApiClient = {
       isActive: true,
       createdAt: device.enrollmentDate,
     };
+  },
+
+  async getDeviceTrustStatus(deviceId: string): Promise<DeviceTrustRecord | null> {
+    await wait();
+    const device = devices.find((item) => item.id === deviceId);
+    if (!device) {
+      throw new ApiError('Device not found', 404);
+    }
+    return clone(device.trust ?? null);
   },
 
   async getLastKnownLocation(deviceId: string): Promise<LocationSnapshot | null> {

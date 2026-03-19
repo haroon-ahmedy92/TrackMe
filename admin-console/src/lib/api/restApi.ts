@@ -387,6 +387,36 @@ export const restApiClient: ApiClient = {
     return payload ? toOwnershipBinding(payload) : null;
   },
 
+  getDeviceTrustStatus: async (deviceId: string) => {
+    const payload = await httpClient.get<{
+      device_id: string;
+      org_id: string;
+      status: 'trusted' | 'caution' | 'unavailable';
+      summary: string;
+      reasons: string[];
+      integrity_status?: string | null;
+      root_suspicion: boolean;
+      debug_suspicion: boolean;
+      mock_location_suspicion: boolean;
+      trusted_telemetry_seen: boolean;
+      observed_at?: string | null;
+    } | null>(`/platform/devices/${deviceId}/trust-status?org_id=${encodeURIComponent(orgId())}`);
+    if (!payload) {
+      return null;
+    }
+    return {
+      status: payload.status,
+      summary: payload.summary,
+      reasons: payload.reasons,
+      integrityStatus: payload.integrity_status ?? undefined,
+      rootSuspicion: payload.root_suspicion,
+      debugSuspicion: payload.debug_suspicion,
+      mockLocationSuspicion: payload.mock_location_suspicion,
+      trustedTelemetrySeen: payload.trusted_telemetry_seen,
+      observedAt: payload.observed_at ?? undefined,
+    };
+  },
+
   getLastKnownLocation: async (deviceId: string) => {
     const payload = await httpClient.get<{
       event_id: string;

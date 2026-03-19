@@ -18,6 +18,7 @@ import type {
   LocationSnapshot,
   OwnershipBindingRecord,
   PlatformSettings,
+  DeviceTrustRecord,
   RemoteActionRecord,
 } from '@/types/models';
 
@@ -26,6 +27,7 @@ export interface ApiClient {
   getDevices(): Promise<DeviceRecord[]>;
   getDeviceById(deviceId: string): Promise<DeviceRecord>;
   getDeviceBinding(deviceId: string): Promise<OwnershipBindingRecord | null>;
+  getDeviceTrustStatus(deviceId: string): Promise<DeviceTrustRecord | null>;
   getLastKnownLocation(deviceId: string): Promise<LocationSnapshot | null>;
   locateDevice(deviceId: string, reason: string): Promise<LocationSnapshot | null>;
   getDeviceAccessHistory(deviceId: string): Promise<AccessHistoryRecord[]>;

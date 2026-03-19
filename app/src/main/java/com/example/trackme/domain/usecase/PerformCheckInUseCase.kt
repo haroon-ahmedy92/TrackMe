@@ -6,6 +6,7 @@ import com.example.trackme.core.TimeProvider
 import com.example.trackme.data.network.CheckInTelemetryPayload
 import com.example.trackme.data.network.LocationTelemetryDto
 import com.example.trackme.data.network.PlatformLocationIngestRequestDto
+import com.example.trackme.data.network.TrustTelemetryDto
 import com.example.trackme.data.preferences.TrackingPreferencesDataSource
 import com.example.trackme.domain.model.CheckInMode
 import com.example.trackme.domain.model.LocationSnapshot
@@ -19,6 +20,8 @@ import com.example.trackme.domain.repository.IntegrityRepository
 import com.example.trackme.domain.repository.LocationRepository
 import com.example.trackme.domain.repository.TelemetrySyncRepository
 import com.example.trackme.telemetry.TelemetrySyncScheduler
+import com.example.trackme.trust.AppTrustSignalCollector
+import com.example.trackme.trust.DeviceTrustEvaluator
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -33,6 +36,8 @@ class PerformCheckInUseCase @Inject constructor(
     private val integrityRepository: IntegrityRepository,
     private val auditRepository: AuditRepository,
     private val telemetrySyncRepository: TelemetrySyncRepository,
+    private val appTrustSignalCollector: AppTrustSignalCollector,
+    private val deviceTrustEvaluator: DeviceTrustEvaluator,
     private val telemetrySigner: TelemetrySigner,
     private val telemetrySyncScheduler: TelemetrySyncScheduler,
     private val timeProvider: TimeProvider,
@@ -70,11 +75,21 @@ class PerformCheckInUseCase @Inject constructor(
         } else {
             locationRepository.captureCurrentLocation(source)
         }
-        val integrityToken = integrityRepository.getIntegrityTokenOrNull()
+        val integritySignal = integrityRepository.getIntegritySignal()
+        val integrityToken = integritySignal.token
         val integrityVerdict = integrityToken
             ?.takeIf { it.isNotBlank() }
             ?.let { "TOKEN_PRESENT" }
-            ?: "UNAVAILABLE_PLACEHOLDER"
+            ?: integritySignal.status.uppercase()
+
+        val trustSummary = deviceTrustEvaluator.assess(
+            integritySignal = integritySignal,
+            appSignals = appTrustSignalCollector.collect(),
+            locationSnapshot = locationSnapshot,
+            keyHardwareBacked = enrollment.keyHardwareBacked == true,
+            attestationDeclared = !enrollment.keyAttestationFormat.isNullOrBlank(),
+        )
+        val trustTelemetry = trustSummary.toTelemetryDto()
 
         deviceStateRepository.updateCheckIn(mode = mode, batteryPercent = batteryPercent, checkInAtEpochMs = now)
 
@@ -88,7 +103,8 @@ class PerformCheckInUseCase @Inject constructor(
             batteryPercent = batteryPercent,
             lowBatteryOptimizationApplied = !mode.shouldCaptureOnLowBattery() && lowBattery,
             location = locationSnapshot?.toTelemetryDto(),
-            integrityVerdict = integrityVerdict
+            integrityVerdict = integrityVerdict,
+            trustSignals = trustTelemetry,
         )
         val auditSignedPayload = telemetrySigner.sign(
             json.encodeToString(telemetryPayload),
@@ -115,6 +131,17 @@ class PerformCheckInUseCase @Inject constructor(
             }
             put("integrityVerdict", integrityVerdict)
             put("integrityTokenPresent", (!integrityToken.isNullOrBlank()).toString())
+            put("trustStatus", trustSummary.status.name)
+            put("trustHeadline", trustSummary.headline)
+            put("trustDetails", trustSummary.details)
+            put("trustReasons", trustSummary.reasons.joinToString(","))
+            put("trustRootSuspicion", trustSummary.rootSuspicion.toString())
+            put("trustDebugBuild", trustSummary.debugBuild.toString())
+            put("trustDebuggableApp", trustSummary.debuggableApp.toString())
+            put("trustMockLocationSuspicion", trustSummary.mockLocationSuspicion.toString())
+            put("trustIntegrityStatus", trustSummary.integrityStatus)
+            put("trustIntegrityTrusted", trustSummary.integrityTrusted.toString())
+            put("trustKeyHardwareBacked", trustSummary.keyHardwareBacked.toString())
             put("telemetryPayloadJson", json.encodeToString(telemetryPayload))
         }
 
@@ -144,6 +171,7 @@ class PerformCheckInUseCase @Inject constructor(
                 batteryPercent = batteryPercent,
                 motionState = locationSnapshot?.motionState?.name?.lowercase(),
                 integrityVerdict = integrityVerdict,
+                trustSignals = trustTelemetry,
             )
             val signedPayload = telemetrySigner.sign(
                 json.encodeToString(unsignedRequest),
@@ -207,6 +235,23 @@ private fun LocationSnapshot.toTelemetryDto(): LocationTelemetryDto {
         wifiRttCapable = wifiRttCapable,
         suspiciousMockLocation = suspiciousMockLocation,
         spoofingReasons = spoofingReasons
+    )
+}
+
+private fun com.example.trackme.trust.DeviceTrustSummary.toTelemetryDto(): TrustTelemetryDto {
+    return TrustTelemetryDto(
+        deviceTrustStatus = status.name.lowercase(),
+        deviceTrustSummary = headline,
+        deviceTrustReasons = reasons,
+        integrityStatus = integrityStatus,
+        integrityTrusted = integrityTrusted,
+        integrityTokenPresent = integrityTokenPresent,
+        appDebugBuild = debugBuild,
+        appDebuggable = debuggableApp,
+        rootSuspicion = rootSuspicion,
+        mockLocationSuspicion = mockLocationSuspicion,
+        keyHardwareBacked = keyHardwareBacked,
+        attestationDeclared = attestationDeclared,
     )
 }
 

@@ -74,6 +74,47 @@ def test_payload_hash_format_guard() -> None:
     assert not _is_hex_digest('abc123')
 
 
+def test_location_payload_hash_changes_when_trust_signals_change() -> None:
+    service = SignedTelemetryService()
+    payload = SimpleNamespace(
+        org_id=uuid4(),
+        device_id=uuid4(),
+        mode=SimpleNamespace(value='normal'),
+        idempotency_key='loc-test-1',
+        captured_at=datetime.now(timezone.utc),
+        latitude=-6.7924,
+        longitude=39.2083,
+        accuracy_meters=12.0,
+        precision=SimpleNamespace(value='precise'),
+        confidence_score=88,
+        source_methods=['fused_last_known'],
+        network_type='wifi',
+        battery_percent=80,
+        motion_state='still',
+        trust_signals=SimpleNamespace(
+            device_trust_status='trusted',
+            device_trust_summary='Looks healthy',
+            device_trust_reasons=[],
+            integrity_status='trusted_placeholder',
+            integrity_trusted=True,
+            integrity_token_present=True,
+            app_debug_build=False,
+            app_debuggable=False,
+            root_suspicion=False,
+            mock_location_suspicion=False,
+            key_hardware_backed=True,
+            attestation_declared=True,
+        ),
+        integrity_verdict='TOKEN_PRESENT',
+        ip_address=None,
+    )
+    changed = SimpleNamespace(**payload.__dict__)
+    changed.trust_signals = SimpleNamespace(**payload.trust_signals.__dict__)
+    changed.trust_signals.mock_location_suspicion = True
+
+    assert service.compute_location_payload_hash(payload) != service.compute_location_payload_hash(changed)
+
+
 @pytest.mark.asyncio
 async def test_signed_telemetry_service_verifies_valid_ecdsa_signature() -> None:
     private_key, key_record = _build_signed_key()

@@ -63,6 +63,38 @@ class DeviceResponse(BaseModel):
     enrollment_type: str
     is_policy_managed: bool
     enrolled_at: datetime
+    last_seen_trust_status: str | None = None
+    last_seen_trust_summary: str | None = None
+    last_seen_trust_reasons: list[str] = Field(default_factory=list)
+
+
+class TrustSignalsRequest(BaseModel):
+    device_trust_status: str = Field(min_length=4, max_length=24)
+    device_trust_summary: str = Field(min_length=4, max_length=280)
+    device_trust_reasons: list[str] = Field(default_factory=list)
+    integrity_status: str = Field(min_length=2, max_length=64)
+    integrity_trusted: bool
+    integrity_token_present: bool
+    app_debug_build: bool
+    app_debuggable: bool
+    root_suspicion: bool
+    mock_location_suspicion: bool
+    key_hardware_backed: bool
+    attestation_declared: bool
+
+
+class DeviceTrustStatusResponse(BaseModel):
+    device_id: UUID
+    org_id: UUID
+    status: str
+    summary: str
+    reasons: list[str] = Field(default_factory=list)
+    integrity_status: str | None = None
+    root_suspicion: bool = False
+    debug_suspicion: bool = False
+    mock_location_suspicion: bool = False
+    trusted_telemetry_seen: bool = False
+    observed_at: datetime | None = None
 
 
 class EnrollmentCreateRequest(BaseModel):
@@ -136,6 +168,7 @@ class LocationIngestRequest(BaseModel):
     network_type: str | None = Field(default=None, max_length=24)
     battery_percent: int | None = Field(default=None, ge=0, le=100)
     motion_state: str | None = Field(default=None, max_length=24)
+    trust_signals: TrustSignalsRequest | None = None
     telemetry_signature: str | None = None
     telemetry_algorithm: str | None = Field(default=None, min_length=3, max_length=40)
     telemetry_key_id: str | None = None
@@ -151,6 +184,9 @@ class LocationIngestResponse(BaseModel):
     telemetry_verified: bool
     telemetry_digest_matches: bool
     integrity_status: str
+    trust_status: str
+    trust_summary: str
+    trust_reasons: list[str] = Field(default_factory=list)
     ip_is_approximate: bool
     rule_matches: list[str] = Field(default_factory=list)
     suspicious_alerts: list[str] = Field(default_factory=list)

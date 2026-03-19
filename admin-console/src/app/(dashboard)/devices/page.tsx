@@ -3,6 +3,7 @@
 import { ConfidenceBadge } from '@/components/common/ConfidenceBadge';
 import { LoadingCard } from '@/components/common/LoadingCard';
 import { LocationPrecisionBadge } from '@/components/common/LocationPrecisionBadge';
+import { TrustStatusBadge } from '@/components/common/TrustStatusBadge';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -92,6 +93,18 @@ export default function DevicesPage() {
                 <div className="stack" style={{ gap: 6 }}>
                   <LocationPrecisionBadge precision={device.location.precision} />
                   <ConfidenceBadge score={device.location.confidenceScore} />
+                </div>
+              ),
+            },
+            {
+              key: 'trust',
+              header: 'Trust',
+              cell: (device) => (
+                <div className="stack" style={{ gap: 6 }}>
+                  <TrustStatusBadge trust={device.trust} />
+                  <span className="text-muted" style={{ fontSize: 12 }}>
+                    {device.trust?.summary ?? 'No recent trust summary yet'}
+                  </span>
                 </div>
               ),
             },

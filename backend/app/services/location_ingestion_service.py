@@ -12,6 +12,7 @@ from app.services.integrity_verification_service import IntegrityVerificationSer
 from app.services.ip_enrichment_service import IpEnrichmentService
 from app.services.rules_engine_service import RulesEngineService
 from app.services.geofence_service import GeofenceService
+from app.services.device_trust_service import DeviceTrustService
 from app.services.signed_telemetry_service import SignedTelemetryService
 
 
@@ -23,6 +24,10 @@ class IngestionResult:
     suspicious_alerts: list[str]
     telemetry_digest_matches: bool
     integrity_status: str
+    trust_status: str
+    trust_summary: str
+    trust_reasons: list[str]
+    trust_changed: bool
     geofence_events: list
 
 
@@ -34,12 +39,14 @@ class LocationIngestionService:
         ip_enrichment_service: IpEnrichmentService,
         rules_engine_service: RulesEngineService,
         geofence_service: GeofenceService,
+        device_trust_service: DeviceTrustService,
     ) -> None:
         self.signed_telemetry_service = signed_telemetry_service
         self.integrity_verification_service = integrity_verification_service
         self.ip_enrichment_service = ip_enrichment_service
         self.rules_engine_service = rules_engine_service
         self.geofence_service = geofence_service
+        self.device_trust_service = device_trust_service
 
     async def ingest(self, session: AsyncSession, payload: LocationIngestRequest) -> IngestionResult:
         device = (await session.execute(select(Device).where(Device.id == payload.device_id))).scalar_one_or_none()
@@ -61,6 +68,10 @@ class LocationIngestionService:
                 suspicious_alerts=[],
                 telemetry_digest_matches=bool(payload.telemetry_payload_hash),
                 integrity_status='duplicate',
+                trust_status=existing.trust_status or 'unavailable',
+                trust_summary=existing.trust_summary or 'Previously recorded event.',
+                trust_reasons=list((existing.trust_signals_json or {}).get('reasons', [])),
+                trust_changed=False,
                 geofence_events=[],
             )
 
@@ -74,6 +85,13 @@ class LocationIngestionService:
         telemetry_digest_matches = verification.digest_matches
         telemetry_verified = verification.verified and telemetry_digest_matches
         integrity = self.integrity_verification_service.assess(payload.integrity_verdict)
+        trust = self.device_trust_service.assess_location_payload(
+            trust_signals=payload.trust_signals,
+            telemetry_verified=telemetry_verified,
+            integrity_status=integrity.status,
+            integrity_trusted=integrity.trusted,
+            verification_reason=verification.reason,
+        )
         ip = await self.ip_enrichment_service.approximate(payload.ip_address)
         rules = await self.rules_engine_service.evaluate_location(session=session, payload=payload)
         alerts = self._build_alerts(
@@ -84,6 +102,7 @@ class LocationIngestionService:
             integrity_trusted=integrity.trusted,
             ip_is_approximate=ip.is_approximate,
         )
+        previous_trust_status = device.last_seen_trust_status
 
         event = LocationEvent(
             org_id=payload.org_id,
@@ -115,12 +134,32 @@ class LocationIngestionService:
             telemetry_verified=telemetry_verified,
             telemetry_verification_reason=verification.reason,
             integrity_verdict=(payload.integrity_verdict or integrity.status)[:64],
+            trust_status=trust.status,
+            trust_summary=trust.summary[:280],
+            trust_signals_json={
+                'reasons': trust.reasons,
+                'root_suspicion': trust.root_suspicion,
+                'debug_suspicion': trust.debug_suspicion,
+                'mock_location_suspicion': trust.mock_location_suspicion,
+                'integrity_status': trust.integrity_status,
+                'integrity_trusted': trust.integrity_trusted,
+                'telemetry_verified': trust.telemetry_verified,
+                'reported': payload.trust_signals.model_dump() if payload.trust_signals is not None else None,
+            },
             location_geom=(
                 func.ST_SetSRID(func.ST_MakePoint(payload.longitude, payload.latitude), 4326)
                 if payload.longitude is not None and payload.latitude is not None
                 else None
             ),
         )
+        device.last_seen_trust_status = trust.status
+        device.last_seen_trust_summary = trust.summary[:280]
+        device.last_seen_trust_reasons_json = {'reasons': trust.reasons}
+        device.last_seen_integrity_status = trust.integrity_status
+        device.last_seen_root_suspicion = trust.root_suspicion
+        device.last_seen_debug_suspicion = trust.debug_suspicion
+        device.last_seen_mock_location_suspicion = trust.mock_location_suspicion
+        device.last_seen_trust_at = event.received_at
         session.add(event)
         await session.flush()
         geofence_events = await self.geofence_service.process_location_event(session, location_event=event)
@@ -132,6 +171,10 @@ class LocationIngestionService:
             suspicious_alerts=alerts,
             telemetry_digest_matches=telemetry_digest_matches,
             integrity_status=integrity.status,
+            trust_status=trust.status,
+            trust_summary=trust.summary,
+            trust_reasons=trust.reasons,
+            trust_changed=previous_trust_status != trust.status,
             geofence_events=geofence_events,
         )
 

@@ -1,5 +1,6 @@
 package com.example.trackme.feature.map
 
+import android.content.ContextWrapper
 import com.example.trackme.core.ui.AsyncUiState
 import com.example.trackme.domain.model.CheckInMode
 import com.example.trackme.domain.model.DashboardState
@@ -11,9 +12,16 @@ import com.example.trackme.domain.model.MotionState
 import com.example.trackme.domain.model.NetworkType
 import com.example.trackme.domain.repository.DeviceStateRepository
 import com.example.trackme.domain.repository.EnrollmentRepository
+import com.example.trackme.domain.repository.IntegrityRepository
 import com.example.trackme.domain.repository.LocationRepository
 import com.example.trackme.domain.usecase.ObserveDashboardStateUseCase
 import com.example.trackme.testing.MainDispatcherRule
+import com.example.trackme.trust.AppTrustSignalCollector
+import com.example.trackme.trust.AppTrustSignals
+import com.example.trackme.trust.DeviceTrustEvaluator
+import com.example.trackme.trust.DeviceTrustStatus
+import com.example.trackme.trust.DeviceTrustSummary
+import com.example.trackme.trust.IntegritySignal
 import com.example.trackme.ui.map.MapProvider
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -37,14 +45,18 @@ class MapViewModelTest {
         val dashboardState = DashboardState(
             enrollment = EnrollmentStatus(isEnrolled = true, organizationName = "Org", consentVersion = "1", enrolledAtEpochMs = 1L),
             deviceState = DeviceState(mode = CheckInMode.NORMAL, lastCheckInEpochMs = 2L, batteryPercent = 80, lostModeUntilEpochMs = null),
-            lastLocation = sampleLocation(epochMs = 2_000L)
+            lastLocation = sampleLocation(epochMs = 2_000L),
+            trustSummary = sampleTrustSummary(),
         )
         val repository = FakeLocationRepository(history = listOf(sampleLocation(epochMs = 1_000L), sampleLocation(epochMs = 2_000L)))
         val viewModel = MapViewModel(
             observeDashboardStateUseCase = ObserveDashboardStateUseCase(
                 enrollmentRepository = FakeEnrollmentRepository(dashboardState.enrollment),
                 deviceStateRepository = FakeDeviceStateRepository(dashboardState.deviceState),
-                locationRepository = repository
+                locationRepository = repository,
+                integrityRepository = FakeIntegrityRepository(),
+                appTrustSignalCollector = FakeAppTrustSignalCollector(),
+                deviceTrustEvaluator = FakeDeviceTrustEvaluator(dashboardState.trustSummary),
             ),
             locationRepository = repository,
             mapProvider = FakeMapProvider()
@@ -96,6 +108,42 @@ private class FakeMapProvider : MapProvider {
     override fun formatMarkerTitle(location: LocationSnapshot): String = "marker"
 }
 
+private class FakeIntegrityRepository : IntegrityRepository {
+    override suspend fun getIntegritySignal(): IntegritySignal = IntegritySignal(
+        token = null,
+        status = "unavailable",
+        trusted = false,
+        provider = "test",
+    )
+
+    override fun observeIntegritySignal(): Flow<IntegritySignal> = flowOf(
+        IntegritySignal(token = null, status = "unavailable", trusted = false, provider = "test")
+    )
+}
+
+private class FakeAppTrustSignalCollector : AppTrustSignalCollector(ContextWrapper(null)) {
+    override fun collect(): AppTrustSignals {
+        return AppTrustSignals(
+            debugBuild = false,
+            debuggableApp = false,
+            testKeysBuild = false,
+            suBinaryPresent = false,
+        )
+    }
+}
+
+private class FakeDeviceTrustEvaluator(
+    private val summary: DeviceTrustSummary,
+) : DeviceTrustEvaluator() {
+    override fun assess(
+        integritySignal: IntegritySignal,
+        appSignals: AppTrustSignals,
+        locationSnapshot: LocationSnapshot?,
+        keyHardwareBacked: Boolean,
+        attestationDeclared: Boolean,
+    ): DeviceTrustSummary = summary
+}
+
 private fun sampleLocation(epochMs: Long) = LocationSnapshot(
     latitude = -6.7924,
     longitude = 39.2083,
@@ -110,4 +158,20 @@ private fun sampleLocation(epochMs: Long) = LocationSnapshot(
     batteryLevelPercent = 80,
     networkType = NetworkType.WIFI,
     motionState = MotionState.STILL
+)
+
+private fun sampleTrustSummary() = DeviceTrustSummary(
+    status = DeviceTrustStatus.TRUSTED,
+    headline = "Advisory trust signals look healthy",
+    details = "Signed telemetry and current device signals do not show obvious issues. This is advisory, not proof.",
+    reasons = emptyList(),
+    integrityStatus = "trusted_placeholder",
+    integrityTrusted = true,
+    debugBuild = false,
+    debuggableApp = false,
+    rootSuspicion = false,
+    mockLocationSuspicion = false,
+    keyHardwareBacked = true,
+    attestationDeclared = true,
+    integrityTokenPresent = true,
 )

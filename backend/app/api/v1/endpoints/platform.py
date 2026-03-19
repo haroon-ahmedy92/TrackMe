@@ -64,6 +64,7 @@ from app.schemas.platform import (
     DeviceKeyRevokeRequest,
     DeviceKeyRotateRequest,
     DeviceKeyResponse,
+    DeviceTrustStatusResponse,
     DeviceRegisterRequest,
     DeviceResponse,
     EnrollmentCreateRequest,
@@ -242,6 +243,33 @@ async def list_devices(
     return [_device_response(d) for d in devices]
 
 
+@router.get('/devices/{device_id}/trust-status', response_model=DeviceTrustStatusResponse)
+async def get_device_trust_status(
+    device_id: UUID,
+    org_id: UUID = Query(...),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.OWNER, Role.AUDITOR)),
+    session: AsyncSession = Depends(get_db_session),
+    service: DeviceRegistryService = Depends(get_device_registry_service),
+) -> DeviceTrustStatusResponse:
+    _assert_org_access(principal, org_id)
+    device = await service.get_device(session, device_id)
+    if device.organization_id != org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Tenant access denied')
+    return DeviceTrustStatusResponse(
+        device_id=device.id,
+        org_id=org_id,
+        status=device.last_seen_trust_status or 'unavailable',
+        summary=device.last_seen_trust_summary or 'Trust-signal coverage is limited for this device.',
+        reasons=list((device.last_seen_trust_reasons_json or {}).get('reasons', [])),
+        integrity_status=device.last_seen_integrity_status,
+        root_suspicion=device.last_seen_root_suspicion,
+        debug_suspicion=device.last_seen_debug_suspicion,
+        mock_location_suspicion=device.last_seen_mock_location_suspicion,
+        trusted_telemetry_seen=device.last_seen_trust_status == 'trusted',
+        observed_at=device.last_seen_trust_at,
+    )
+
+
 @router.post('/enrollments', response_model=EnrollmentResponse)
 async def create_enrollment(
     payload: EnrollmentCreateRequest,
@@ -414,9 +442,26 @@ async def ingest_location(
             'ip_approximate': result.event.is_ip_approximate,
             'telemetry_digest_matches': result.telemetry_digest_matches,
             'integrity_status': result.integrity_status,
+            'trust_status': result.trust_status,
+            'trust_summary': result.trust_summary,
+            'trust_reasons': result.trust_reasons,
             'suspicious_alerts': result.suspicious_alerts,
         },
     )
+    if result.trust_changed:
+        await audit_log_service.append(
+            session,
+            org_id=str(payload.org_id),
+            actor_sub='system:device_trust',
+            action='DEVICE_TRUST_UPDATED',
+            entity_type='device',
+            entity_id=str(payload.device_id),
+            metadata={
+                'trust_status': result.trust_status,
+                'trust_summary': result.trust_summary,
+                'trust_reasons': result.trust_reasons,
+            },
+        )
     await session.commit()
     return LocationIngestResponse(
         event_id=result.event.id,
@@ -425,6 +470,9 @@ async def ingest_location(
         telemetry_verified=result.event.telemetry_verified,
         telemetry_digest_matches=result.telemetry_digest_matches,
         integrity_status=result.integrity_status,
+        trust_status=result.trust_status,
+        trust_summary=result.trust_summary,
+        trust_reasons=result.trust_reasons,
         ip_is_approximate=result.event.is_ip_approximate,
         rule_matches=result.rule_matches,
         suspicious_alerts=result.suspicious_alerts,
@@ -473,6 +521,9 @@ async def ingest_location_batch(
                     'ip_approximate': result.event.is_ip_approximate,
                     'telemetry_digest_matches': result.telemetry_digest_matches,
                     'integrity_status': result.integrity_status,
+                    'trust_status': result.trust_status,
+                    'trust_summary': result.trust_summary,
+                    'trust_reasons': result.trust_reasons,
                     'suspicious_alerts': result.suspicious_alerts,
                     'batched': True,
                 },
@@ -1854,6 +1905,9 @@ def _device_response(device) -> DeviceResponse:
         enrollment_type=device.enrollment_type.value,
         is_policy_managed=device.is_policy_managed,
         enrolled_at=device.enrolled_at,
+        last_seen_trust_status=device.last_seen_trust_status,
+        last_seen_trust_summary=device.last_seen_trust_summary,
+        last_seen_trust_reasons=list((device.last_seen_trust_reasons_json or {}).get('reasons', [])),
     )
 
 

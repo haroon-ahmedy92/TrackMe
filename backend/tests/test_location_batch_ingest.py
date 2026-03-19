@@ -50,6 +50,10 @@ class FakeLocationIngestionService:
             suspicious_alerts=['STALE_CAPTURE_TIMESTAMP'] if duplicate else [],
             telemetry_digest_matches=True,
             integrity_status='trusted',
+            trust_status='trusted',
+            trust_summary='Signed telemetry and current advisory signals look consistent.',
+            trust_reasons=[],
+            trust_changed=False,
         )
 
 
