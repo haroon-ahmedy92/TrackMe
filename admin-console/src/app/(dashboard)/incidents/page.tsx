@@ -390,17 +390,18 @@ export default function IncidentsPage() {
               />
               <Input label="Redact fields" value={redactionFields} onChange={(event) => setRedactionFields(event.target.value)} />
               <Button onClick={() => void submitExport()} disabled={actionLoading}>
-                Generate Export Placeholder
+                Request Evidence Export
               </Button>
               {(evidenceState.data?.exports ?? []).map((item) => (
                 <div key={item.id} className="warning-note">
-                  {item.format.toUpperCase()} export • {item.status} •{' '}
+                  {item.format.toUpperCase()} export • {item.status}
+                  {item.policyReason ? ` • ${item.policyReason}` : ''} •{' '}
                   {item.downloadPlaceholder ? (
                     <a href={item.downloadPlaceholder} style={{ color: 'inherit' }}>
                       download bundle
                     </a>
                   ) : (
-                    'placeholder only'
+                    item.status === 'pending_approval' ? 'awaiting approval' : 'placeholder only'
                   )}
                 </div>
               ))}

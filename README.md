@@ -43,6 +43,7 @@ The easiest learning path is:
 8. [`docs/compliance-ux.md`](./docs/compliance-ux.md)
 9. [`docs/event-queue-rules.md`](./docs/event-queue-rules.md)
 10. [`docs/device-identity-signed-telemetry.md`](./docs/device-identity-signed-telemetry.md)
+11. [`docs/policy-approvals.md`](./docs/policy-approvals.md)
 
 The larger test execution plan also lives in [`TEST_STRATEGY.md`](./TEST_STRATEGY.md).
 

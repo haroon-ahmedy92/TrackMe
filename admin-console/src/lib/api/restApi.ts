@@ -187,11 +187,13 @@ const toEvidenceExport = (payload: {
   incident_id: string;
   requested_by_sub: string;
   format: 'json' | 'pdf';
-  status: 'generated' | 'failed';
+  status: 'generated' | 'failed' | 'pending_approval';
   reason: string;
   redact_fields: string[];
   summary: Record<string, string | number | boolean | null>;
   download_placeholder?: string | null;
+  approval_request_id?: string | null;
+  policy_reason?: string | null;
   created_at: string;
   generated_at?: string | null;
 }): EvidenceExportRecord => ({
@@ -204,6 +206,8 @@ const toEvidenceExport = (payload: {
   redactFields: payload.redact_fields,
   summary: payload.summary,
   downloadPlaceholder: payload.download_placeholder ?? undefined,
+  approvalRequestId: payload.approval_request_id ?? undefined,
+  policyReason: payload.policy_reason ?? undefined,
   createdAt: payload.created_at,
   generatedAt: payload.generated_at ?? undefined,
 });
@@ -306,6 +310,13 @@ const toPlatformSettings = (payload: {
     location_event_days: number;
     audit_log_days: number;
     incident_evidence_days: number;
+    locate_reason_min_length?: number;
+    require_incident_for_locate?: boolean;
+    lock_requires_active_incident?: boolean;
+    wipe_requires_policy_approval?: boolean;
+    wipe_requires_confirmed_stolen?: boolean;
+    high_risk_actions_require_two_person?: boolean;
+    evidence_export_requires_permission?: boolean;
   };
   privacy_defaults: {
     explicit_consent_required: boolean;
@@ -325,6 +336,13 @@ const toPlatformSettings = (payload: {
     locationEventDays: payload.retention_policy.location_event_days,
     auditLogDays: payload.retention_policy.audit_log_days,
     incidentEvidenceDays: payload.retention_policy.incident_evidence_days,
+    locateReasonMinLength: payload.retention_policy.locate_reason_min_length,
+    requireIncidentForLocate: payload.retention_policy.require_incident_for_locate,
+    lockRequiresActiveIncident: payload.retention_policy.lock_requires_active_incident,
+    wipeRequiresPolicyApproval: payload.retention_policy.wipe_requires_policy_approval,
+    wipeRequiresConfirmedStolen: payload.retention_policy.wipe_requires_confirmed_stolen,
+    highRiskActionsRequireTwoPerson: payload.retention_policy.high_risk_actions_require_two_person,
+    evidenceExportRequiresPermission: payload.retention_policy.evidence_export_requires_permission,
   },
   privacyDefaults: {
     explicitConsentRequired: payload.privacy_defaults.explicit_consent_required,

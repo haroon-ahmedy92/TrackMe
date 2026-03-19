@@ -167,7 +167,30 @@ class CaseEvidenceService:
         actor_sub: str,
         spatial_service: SpatialService,
         bundle_service: EvidenceExportBundleService,
+        initial_status: EvidenceExportStatus = EvidenceExportStatus.GENERATED,
     ) -> EvidenceExport:
+        now = datetime.now(timezone.utc)
+        if initial_status == EvidenceExportStatus.PENDING_APPROVAL:
+            export = EvidenceExport(
+                org_id=incident.org_id,
+                incident_id=incident.id,
+                requested_by_sub=actor_sub,
+                format=payload.format,
+                status=initial_status,
+                reason=payload.reason.strip(),
+                redact_fields_json={'fields': payload.redact_fields},
+                summary_json={
+                    'placeholder': True,
+                    'pending_approval': True,
+                    'generated_at': None,
+                },
+                created_at=now,
+                generated_at=None,
+            )
+            session.add(export)
+            await session.flush()
+            return export
+
         chain = await self.build_chain(
             session,
             incident=incident,
@@ -181,7 +204,7 @@ class CaseEvidenceService:
             'entry_count': len(chain['entries']),
             'note_count': len(chain['notes']),
             'attachment_count': len(chain['attachments']),
-            'generated_at': datetime.now(timezone.utc).isoformat(),
+            'generated_at': now.isoformat(),
             'summary_preview': {
                 'state': incident.state.value,
                 'ticket_reference': chain['incident'].get('ticket_reference'),
@@ -192,14 +215,62 @@ class CaseEvidenceService:
             incident_id=incident.id,
             requested_by_sub=actor_sub,
             format=payload.format,
-            status=EvidenceExportStatus.GENERATED,
+            status=initial_status,
             reason=payload.reason.strip(),
             redact_fields_json={'fields': payload.redact_fields},
             summary_json=summary,
-            created_at=datetime.now(timezone.utc),
-            generated_at=datetime.now(timezone.utc),
+            created_at=now,
+            generated_at=now,
         )
         session.add(export)
+        await session.flush()
+        bundle = bundle_service.ensure_bundle(export_record=export, chain=chain)
+        export.summary_json = {
+            **summary,
+            'bundle_path': str(bundle.bundle_path),
+            'summary_path': str(bundle.summary_path),
+        }
+        await session.flush()
+        return export
+
+    async def materialize_pending_export(
+        self,
+        session: AsyncSession,
+        *,
+        export: EvidenceExport,
+        incident: Incident,
+        spatial_service: SpatialService,
+        bundle_service: EvidenceExportBundleService,
+    ) -> EvidenceExport:
+        payload = IncidentEvidenceExportRequest(
+            org_id=incident.org_id,
+            format=export.format,
+            reason=export.reason,
+            redact_fields=list(export.redact_fields_json.get('fields', [])),
+        )
+        chain = await self.build_chain(
+            session,
+            incident=incident,
+            redact_fields=payload.redact_fields,
+            spatial_service=spatial_service,
+        )
+        now = datetime.now(timezone.utc)
+        summary = {
+            'format': export.format.value,
+            'placeholder': True,
+            'incident_id': str(incident.id),
+            'entry_count': len(chain['entries']),
+            'note_count': len(chain['notes']),
+            'attachment_count': len(chain['attachments']),
+            'generated_at': now.isoformat(),
+            'summary_preview': {
+                'state': incident.state.value,
+                'ticket_reference': chain['incident'].get('ticket_reference'),
+            },
+        }
+        export.status = EvidenceExportStatus.GENERATED
+        export.summary_json = summary
+        export.generated_at = now
         await session.flush()
         bundle = bundle_service.ensure_bundle(export_record=export, chain=chain)
         export.summary_json = {

@@ -236,6 +236,7 @@ class RemoteActionKind(str, enum.Enum):
 
 
 class RemoteActionState(str, enum.Enum):
+    PENDING_APPROVAL = 'pending_approval'
     PENDING = 'pending'
     SENT = 'sent'
     DELIVERED = 'delivered'
@@ -273,8 +274,31 @@ class EvidenceExportFormat(str, enum.Enum):
 
 
 class EvidenceExportStatus(str, enum.Enum):
+    PENDING_APPROVAL = 'pending_approval'
     GENERATED = 'generated'
     FAILED = 'failed'
+
+
+class PolicyActionType(str, enum.Enum):
+    LOCATE = 'locate'
+    ENTER_LOST_MODE = 'enter_lost_mode'
+    DISPLAY_RECOVERY_MESSAGE = 'display_recovery_message'
+    LOCK = 'lock'
+    WIPE = 'wipe'
+    EVIDENCE_EXPORT = 'evidence_export'
+    RETENTION_UPDATE = 'retention_update'
+
+
+class ApprovalStatus(str, enum.Enum):
+    PENDING = 'pending'
+    APPROVED = 'approved'
+    REJECTED = 'rejected'
+    EXPIRED = 'expired'
+
+
+class ApprovalDecisionType(str, enum.Enum):
+    APPROVE = 'approve'
+    REJECT = 'reject'
 
 
 class Organization(Base):
@@ -293,6 +317,7 @@ class Organization(Base):
     pairing_tokens: Mapped[list['PairingToken']] = relationship()
     ownership_transfers: Mapped[list['OwnershipTransfer']] = relationship()
     access_reviews: Mapped[list['AccessReview']] = relationship()
+    sensitive_action_approvals: Mapped[list['SensitiveActionApproval']] = relationship()
     tenant_settings: Mapped[list['TenantSettings']] = relationship()
     abuse_reports: Mapped[list['AbuseReport']] = relationship()
     deprovision_requests: Mapped[list['DeprovisionRequest']] = relationship()
@@ -392,6 +417,13 @@ class DeviceAccessPolicy(Base):
     admin_can_locate: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     security_operator_can_review: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     require_access_review: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    owner_can_export_evidence: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    admin_can_export_evidence: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    security_can_export_evidence: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    admin_can_lock: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    admin_can_wipe: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    require_incident_for_locate: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    require_two_person_wipe_approval: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -604,6 +636,52 @@ class EvidenceExport(Base):
     incident: Mapped['Incident'] = relationship(back_populates='evidence_exports')
 
 
+class SensitiveActionApproval(Base):
+    __tablename__ = 'sensitive_action_approvals'
+    __table_args__ = (
+        Index('ix_sensitive_action_approvals_org_status_created', 'org_id', 'status', 'created_at'),
+        Index('ix_sensitive_action_approvals_entity', 'entity_type', 'entity_id'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('orgs.id'), nullable=False)
+    action_type: Mapped[PolicyActionType] = mapped_column(Enum(PolicyActionType), nullable=False)
+    status: Mapped[ApprovalStatus] = mapped_column(Enum(ApprovalStatus), nullable=False, default=ApprovalStatus.PENDING)
+    entity_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    entity_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    device_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey('devices.id'), nullable=True)
+    incident_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey('incidents.id'), nullable=True)
+    requested_by_sub: Mapped[str] = mapped_column(String(150), nullable=False)
+    request_reason: Mapped[str] = mapped_column(String(280), nullable=False)
+    required_approvals: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    policy_context_json: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    requested_payload_json: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    decisions: Mapped[list['SensitiveActionApprovalDecision']] = relationship(back_populates='approval')
+
+
+class SensitiveActionApprovalDecision(Base):
+    __tablename__ = 'sensitive_action_approval_decisions'
+    __table_args__ = (
+        UniqueConstraint('approval_id', 'actor_sub', name='uq_sensitive_action_approval_actor'),
+        Index('ix_sensitive_action_approval_decisions_approval_created', 'approval_id', 'created_at'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    approval_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('sensitive_action_approvals.id'), nullable=False)
+    actor_sub: Mapped[str] = mapped_column(String(150), nullable=False)
+    decision: Mapped[ApprovalDecisionType] = mapped_column(Enum(ApprovalDecisionType), nullable=False)
+    reason: Mapped[str] = mapped_column(String(280), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    approval: Mapped['SensitiveActionApproval'] = relationship(back_populates='decisions')
+
+
 class Geofence(Base):
     __tablename__ = 'geofences'
     __table_args__ = (
@@ -716,6 +794,13 @@ class TenantSettings(Base):
     location_event_days: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
     audit_log_days: Mapped[int] = mapped_column(Integer, nullable=False, default=90)
     incident_evidence_days: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
+    locate_reason_min_length: Mapped[int] = mapped_column(Integer, nullable=False, default=8)
+    require_incident_for_locate: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    lock_requires_active_incident: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    wipe_requires_policy_approval: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    wipe_requires_confirmed_stolen: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    high_risk_actions_require_two_person: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    evidence_export_requires_permission: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     updated_by_sub: Mapped[str | None] = mapped_column(String(150), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

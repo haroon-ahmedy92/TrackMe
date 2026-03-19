@@ -121,6 +121,12 @@ export default function RemoteActionsPage() {
               header: 'Requested',
               cell: (action) => `${formatDateTime(action.requestedAt)} by ${action.requestedBy}`,
             },
+            {
+              key: 'approval',
+              header: 'Approval',
+              cell: (action) =>
+                action.requiredApprovals ? `${action.approvalCount ?? 0}/${action.requiredApprovals} approvals` : 'Not required',
+            },
           ]}
           emptyMessage="No remote actions pending"
         />
@@ -138,6 +144,12 @@ export default function RemoteActionsPage() {
             Device: {selectedAction.deviceName} • Last check-in: {formatDateTime(selectedAction.lastCheckInAt)}
           </p>
           <p className="text-muted" style={{ marginTop: 6 }}>Reason: {selectedAction.reason}</p>
+          {selectedAction.policyReason ? (
+            <p className="warning-note" style={{ marginTop: 12, marginBottom: 0 }}>
+              Policy: {selectedAction.policyReason}
+              {selectedAction.requiredApprovals ? ` (${selectedAction.approvalCount ?? 0}/${selectedAction.requiredApprovals} approvals)` : ''}
+            </p>
+          ) : null}
 
           <div className="row" style={{ marginTop: 12 }}>
             <Button onClick={() => setModal('approve')} disabled={selectedAction.status !== 'PENDING'}>

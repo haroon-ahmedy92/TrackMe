@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
@@ -9,7 +9,9 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
+    get_approval_workflow_service,
     get_audit_log_service,
+    get_authorization_policy_service,
     get_auth_identity_service,
     get_case_evidence_service,
     get_case_management_service,
@@ -31,7 +33,16 @@ from app.api.deps import (
 )
 from app.core.security import Principal, Role, require_roles
 from app.db.base import get_db_session
-from app.db.models import AuditLog, GeofenceEvent, Incident, LocationEvent
+from app.db.models import (
+    ApprovalStatus,
+    AuditLog,
+    EvidenceExportStatus,
+    GeofenceEvent,
+    Incident,
+    LocationEvent,
+    RemoteAction,
+    RemoteActionState,
+)
 from app.schemas.compliance import (
     AbuseReportCreateRequest,
     AbuseReportResponse,
@@ -82,18 +93,23 @@ from app.schemas.platform import (
     LocationBatchIngestItemResponse,
     LocationIngestRequest,
     LocationIngestResponse,
+    ApprovalDecisionRequest,
     NotificationCreateRequest,
     NotificationResponse,
     ObservabilityAlertResponse,
     ObservabilityDashboardResponse,
+    PolicyDecisionResponse,
     OrganizationCreateRequest,
     OrganizationResponse,
     RemoteActionCreateRequest,
     RemoteActionResponse,
+    SensitiveActionApprovalResponse,
     RuleEvaluationResponse,
     UserResponse,
     UserUpsertRequest,
 )
+from app.services.approval_workflow_service import ApprovalWorkflowService
+from app.services.authorization_policy_service import AuthorizationPolicyService, PolicyDecision
 from app.services.audit_log_service import AuditLogService
 from app.services.auth_identity_service import AuthIdentityService
 from app.services.case_evidence_service import CaseEvidenceService
@@ -849,20 +865,81 @@ async def create_case_export(
     case_evidence_service: CaseEvidenceService = Depends(get_case_evidence_service),
     bundle_service: EvidenceExportBundleService = Depends(get_evidence_export_bundle_service),
     spatial_service: SpatialService = Depends(get_spatial_service),
+    policy_service: AuthorizationPolicyService = Depends(get_authorization_policy_service),
+    approval_service: ApprovalWorkflowService = Depends(get_approval_workflow_service),
     audit_log_service: AuditLogService = Depends(get_audit_log_service),
 ) -> IncidentEvidenceExportResponse:
     incident = await service.get_case(session, incident_id)
     _assert_org_access(principal, payload.org_id)
     if incident.org_id != payload.org_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Tenant access denied')
-    export = await case_evidence_service.create_export(
+    policy_decision = await policy_service.evaluate_evidence_export(
         session,
         incident=incident,
+        principal=principal,
         payload=payload,
-        actor_sub=principal.subject,
-        spatial_service=spatial_service,
-        bundle_service=bundle_service,
     )
+    await audit_log_service.append(
+        session,
+        org_id=str(payload.org_id),
+        actor_sub=principal.subject,
+        action='POLICY_EVIDENCE_EXPORT_ALLOWED' if policy_decision.allowed else 'POLICY_EVIDENCE_EXPORT_DENIED',
+        entity_type='incident',
+        entity_id=str(incident.id),
+        metadata={
+            'reason': payload.reason,
+            'decision_reason_code': policy_decision.reason_code,
+            'decision_reason': policy_decision.reason,
+            'requires_approval': policy_decision.requires_approval,
+            'required_approvals': policy_decision.required_approvals,
+        },
+    )
+    if not policy_decision.allowed:
+        await session.commit()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=policy_decision.reason)
+    try:
+        export = await case_evidence_service.create_export(
+            session,
+            incident=incident,
+            payload=payload,
+            actor_sub=principal.subject,
+            spatial_service=spatial_service,
+            bundle_service=bundle_service,
+            initial_status=(
+                EvidenceExportStatus.PENDING_APPROVAL if policy_decision.requires_approval else EvidenceExportStatus.GENERATED
+            ),
+        )
+    except TypeError:
+        export = await case_evidence_service.create_export(
+            session,
+            incident=incident,
+            payload=payload,
+            actor_sub=principal.subject,
+            spatial_service=spatial_service,
+            bundle_service=bundle_service,
+        )
+    approval = None
+    if policy_decision.requires_approval:
+        approval = await approval_service.create_request(
+            session,
+            org_id=payload.org_id,
+            action_type=policy_decision.action_type,
+            entity_type='evidence_export',
+            entity_id=str(export.id),
+            device_id=incident.device_id,
+            incident_id=incident.id,
+            requested_by_sub=principal.subject,
+            request_reason=payload.reason,
+            required_approvals=policy_decision.required_approvals,
+            policy_decision=policy_decision,
+            requested_payload=payload.model_dump(mode='json'),
+        )
+        export.summary_json = {
+            **export.summary_json,
+            'approval_request_id': str(approval.id),
+            'policy_reason': policy_decision.reason,
+        }
+        await session.flush()
     await audit_log_service.append(
         session,
         org_id=str(payload.org_id),
@@ -870,7 +947,13 @@ async def create_case_export(
         action='CASE_EVIDENCE_EXPORT_CREATED',
         entity_type='evidence_export',
         entity_id=str(export.id),
-        metadata={'incident_id': str(incident.id), 'format': export.format.value, 'redact_fields': payload.redact_fields},
+        metadata={
+            'incident_id': str(incident.id),
+            'format': export.format.value,
+            'redact_fields': payload.redact_fields,
+            'approval_request_id': str(approval.id) if approval else None,
+            'policy_reason': policy_decision.reason,
+        },
     )
     await session.commit()
     return _incident_export_response(export, bundle_service=bundle_service)
@@ -898,6 +981,8 @@ async def download_case_export(
     )
     if export is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Unknown export_id')
+    if export.status != EvidenceExportStatus.GENERATED:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Export is not ready for download')
     bundle_path = bundle_service.bundle_path(org_id=incident.org_id, incident_id=incident.id, export_id=export.id)
     if not bundle_path.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Export bundle not generated')
@@ -955,10 +1040,60 @@ async def create_remote_action(
     principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY)),
     session: AsyncSession = Depends(get_db_session),
     service: RemoteActionService = Depends(get_remote_action_service),
+    policy_service: AuthorizationPolicyService = Depends(get_authorization_policy_service),
+    approval_service: ApprovalWorkflowService = Depends(get_approval_workflow_service),
     audit_log_service: AuditLogService = Depends(get_audit_log_service),
 ) -> RemoteActionResponse:
     _assert_org_access(principal, payload.org_id)
-    action = await service.request_action(session, payload, requested_by_sub=principal.subject)
+    try:
+        policy_decision = await policy_service.evaluate_remote_action(
+            session,
+            payload=payload,
+            principal=principal,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await audit_log_service.append(
+        session,
+        org_id=str(payload.org_id),
+        actor_sub=principal.subject,
+        action=f'POLICY_{payload.action_kind.value.upper()}_ALLOWED' if policy_decision.allowed else f'POLICY_{payload.action_kind.value.upper()}_DENIED',
+        entity_type='device',
+        entity_id=str(payload.device_id),
+        metadata={
+            'incident_id': str(payload.incident_id) if payload.incident_id else None,
+            'reason': payload.reason,
+            'decision_reason_code': policy_decision.reason_code,
+            'decision_reason': policy_decision.reason,
+            'requires_approval': policy_decision.requires_approval,
+            'required_approvals': policy_decision.required_approvals,
+        },
+    )
+    if not policy_decision.allowed:
+        await session.commit()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=policy_decision.reason)
+    action = await service.request_action(
+        session,
+        payload,
+        requested_by_sub=principal.subject,
+        initial_state=RemoteActionState.PENDING_APPROVAL if policy_decision.requires_approval else RemoteActionState.PENDING,
+    )
+    approval = None
+    if policy_decision.requires_approval:
+        approval = await approval_service.create_request(
+            session,
+            org_id=payload.org_id,
+            action_type=policy_decision.action_type,
+            entity_type='remote_action',
+            entity_id=str(action.id),
+            device_id=payload.device_id,
+            incident_id=payload.incident_id,
+            requested_by_sub=principal.subject,
+            request_reason=payload.reason,
+            required_approvals=policy_decision.required_approvals,
+            policy_decision=policy_decision,
+            requested_payload=payload.model_dump(mode='json'),
+        )
     await audit_log_service.append(
         session,
         org_id=str(payload.org_id),
@@ -973,6 +1108,8 @@ async def create_remote_action(
             'delayed_until': payload.delayed_until.isoformat() if payload.delayed_until else None,
             'elevated_confirmation': payload.elevated_confirmation,
             'acknowledge_wipe_tradeoff': payload.acknowledge_wipe_tradeoff,
+            'approval_request_id': str(approval.id) if approval else None,
+            'policy_reason': policy_decision.reason,
         },
     )
     await session.commit()
@@ -984,8 +1121,151 @@ async def create_remote_action(
         action_kind=action.action_kind,
         state=action.state.value,
         delayed_until=action.delayed_until,
+        approval_request_id=approval.id if approval else None,
+        policy_reason=policy_decision.reason,
         requested_at=action.requested_at,
     )
+
+
+@router.get('/remote-actions', response_model=list[RemoteActionResponse])
+async def list_remote_actions(
+    org_id: UUID = Query(...),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.AUDITOR)),
+    session: AsyncSession = Depends(get_db_session),
+    approval_service: ApprovalWorkflowService = Depends(get_approval_workflow_service),
+) -> list[RemoteActionResponse]:
+    _assert_org_access(principal, org_id)
+    actions = list(
+        (
+            await session.execute(
+                select(RemoteAction)
+                .where(RemoteAction.org_id == org_id)
+                .order_by(desc(RemoteAction.requested_at))
+            )
+        ).scalars().all()
+    )
+    responses: list[RemoteActionResponse] = []
+    for action in actions:
+        approval = await approval_service.find_by_entity(session, entity_type='remote_action', entity_id=str(action.id))
+        responses.append(
+            RemoteActionResponse(
+                remote_action_id=action.id,
+                org_id=action.org_id,
+                device_id=action.device_id,
+                incident_id=action.incident_id,
+                action_kind=action.action_kind,
+                state=action.state.value,
+                delayed_until=action.delayed_until,
+                approval_request_id=approval.id if approval else None,
+                policy_reason=approval.policy_context_json.get('reason') if approval else None,
+                requested_at=action.requested_at,
+            )
+        )
+    return responses
+
+
+@router.get('/approvals', response_model=list[SensitiveActionApprovalResponse])
+async def list_sensitive_action_approvals(
+    org_id: UUID = Query(...),
+    approval_status: ApprovalStatus | None = Query(default=None),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.AUDITOR)),
+    session: AsyncSession = Depends(get_db_session),
+    approval_service: ApprovalWorkflowService = Depends(get_approval_workflow_service),
+) -> list[SensitiveActionApprovalResponse]:
+    _assert_org_access(principal, org_id)
+    approvals = await approval_service.list_approvals(session, org_id=org_id, status=approval_status)
+    return [_approval_response(item) for item in approvals]
+
+
+@router.post('/approvals/{approval_id}/decision', response_model=SensitiveActionApprovalResponse)
+async def decide_sensitive_action_approval(
+    approval_id: UUID,
+    payload: ApprovalDecisionRequest,
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY)),
+    session: AsyncSession = Depends(get_db_session),
+    approval_service: ApprovalWorkflowService = Depends(get_approval_workflow_service),
+    case_service: CaseManagementService = Depends(get_case_management_service),
+    case_evidence_service: CaseEvidenceService = Depends(get_case_evidence_service),
+    remote_action_service: RemoteActionService = Depends(get_remote_action_service),
+    bundle_service: EvidenceExportBundleService = Depends(get_evidence_export_bundle_service),
+    spatial_service: SpatialService = Depends(get_spatial_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> SensitiveActionApprovalResponse:
+    approval = await _apply_approval_decision(
+        approval_id=approval_id,
+        payload=payload,
+        principal=principal,
+        session=session,
+        approval_service=approval_service,
+        case_service=case_service,
+        case_evidence_service=case_evidence_service,
+        bundle_service=bundle_service,
+        spatial_service=spatial_service,
+        audit_log_service=audit_log_service,
+    )
+    return _approval_response(approval)
+
+
+@router.post('/remote-actions/{action_id}/approve', response_model=SensitiveActionApprovalResponse)
+async def approve_remote_action(
+    action_id: UUID,
+    payload: ApprovalDecisionRequest,
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY)),
+    session: AsyncSession = Depends(get_db_session),
+    approval_service: ApprovalWorkflowService = Depends(get_approval_workflow_service),
+    case_service: CaseManagementService = Depends(get_case_management_service),
+    case_evidence_service: CaseEvidenceService = Depends(get_case_evidence_service),
+    bundle_service: EvidenceExportBundleService = Depends(get_evidence_export_bundle_service),
+    spatial_service: SpatialService = Depends(get_spatial_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> SensitiveActionApprovalResponse:
+    approval = await approval_service.find_by_entity(session, entity_type='remote_action', entity_id=str(action_id))
+    if approval is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No approval workflow found for remote action')
+    resolved = await _apply_approval_decision(
+        approval_id=approval.id,
+        payload=payload.model_copy(update={'approve': True}),
+        principal=principal,
+        session=session,
+        approval_service=approval_service,
+        case_service=case_service,
+        case_evidence_service=case_evidence_service,
+        bundle_service=bundle_service,
+        spatial_service=spatial_service,
+        audit_log_service=audit_log_service,
+    )
+    return _approval_response(resolved)
+
+
+@router.post('/remote-actions/{action_id}/reject', response_model=SensitiveActionApprovalResponse)
+async def reject_remote_action(
+    action_id: UUID,
+    payload: ApprovalDecisionRequest,
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY)),
+    session: AsyncSession = Depends(get_db_session),
+    approval_service: ApprovalWorkflowService = Depends(get_approval_workflow_service),
+    case_service: CaseManagementService = Depends(get_case_management_service),
+    case_evidence_service: CaseEvidenceService = Depends(get_case_evidence_service),
+    bundle_service: EvidenceExportBundleService = Depends(get_evidence_export_bundle_service),
+    spatial_service: SpatialService = Depends(get_spatial_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> SensitiveActionApprovalResponse:
+    approval = await approval_service.find_by_entity(session, entity_type='remote_action', entity_id=str(action_id))
+    if approval is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No approval workflow found for remote action')
+    resolved = await _apply_approval_decision(
+        approval_id=approval.id,
+        payload=payload.model_copy(update={'approve': False}),
+        principal=principal,
+        session=session,
+        approval_service=approval_service,
+        case_service=case_service,
+        case_evidence_service=case_evidence_service,
+        bundle_service=bundle_service,
+        spatial_service=spatial_service,
+        audit_log_service=audit_log_service,
+    )
+    return _approval_response(resolved)
 
 
 @router.post('/notifications', response_model=NotificationResponse)
@@ -1436,6 +1716,13 @@ async def get_platform_settings(
             location_event_days=settings_record.location_event_days,
             audit_log_days=settings_record.audit_log_days,
             incident_evidence_days=settings_record.incident_evidence_days,
+            locate_reason_min_length=getattr(settings_record, 'locate_reason_min_length', 8),
+            require_incident_for_locate=getattr(settings_record, 'require_incident_for_locate', False),
+            lock_requires_active_incident=getattr(settings_record, 'lock_requires_active_incident', True),
+            wipe_requires_policy_approval=getattr(settings_record, 'wipe_requires_policy_approval', True),
+            wipe_requires_confirmed_stolen=getattr(settings_record, 'wipe_requires_confirmed_stolen', True),
+            high_risk_actions_require_two_person=getattr(settings_record, 'high_risk_actions_require_two_person', True),
+            evidence_export_requires_permission=getattr(settings_record, 'evidence_export_requires_permission', True),
         ),
         privacy_defaults=PrivacyDefaultsResponse(),
         updated_at=settings_record.updated_at,
@@ -1449,9 +1736,31 @@ async def update_retention_policy(
     principal: Principal = Depends(require_roles(Role.ADMIN, Role.ORG_ADMIN, Role.SUPER_ADMIN)),
     session: AsyncSession = Depends(get_db_session),
     compliance_service: ComplianceService = Depends(get_compliance_service),
+    policy_service: AuthorizationPolicyService = Depends(get_authorization_policy_service),
     audit_log_service: AuditLogService = Depends(get_audit_log_service),
 ) -> RetentionPolicyResponse:
     _assert_org_access(principal, payload.org_id)
+    policy_decision = await policy_service.evaluate_retention_update(
+        session,
+        principal=principal,
+        payload=payload,
+    )
+    await audit_log_service.append(
+        session,
+        org_id=str(payload.org_id),
+        actor_sub=principal.subject,
+        action='POLICY_RETENTION_UPDATE_ALLOWED' if policy_decision.allowed else 'POLICY_RETENTION_UPDATE_DENIED',
+        entity_type='tenant_settings',
+        entity_id=str(payload.org_id),
+        metadata={
+            'reason': payload.reason,
+            'decision_reason_code': policy_decision.reason_code,
+            'decision_reason': policy_decision.reason,
+        },
+    )
+    if not policy_decision.allowed:
+        await session.commit()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=policy_decision.reason)
     settings_record = await compliance_service.update_retention_policy(
         session,
         payload=payload,
@@ -1469,6 +1778,13 @@ async def update_retention_policy(
             'location_event_days': payload.location_event_days,
             'audit_log_days': payload.audit_log_days,
             'incident_evidence_days': payload.incident_evidence_days,
+            'locate_reason_min_length': payload.locate_reason_min_length,
+            'require_incident_for_locate': payload.require_incident_for_locate,
+            'lock_requires_active_incident': payload.lock_requires_active_incident,
+            'wipe_requires_policy_approval': payload.wipe_requires_policy_approval,
+            'wipe_requires_confirmed_stolen': payload.wipe_requires_confirmed_stolen,
+            'high_risk_actions_require_two_person': payload.high_risk_actions_require_two_person,
+            'evidence_export_requires_permission': payload.evidence_export_requires_permission,
         },
     )
     await session.commit()
@@ -1476,6 +1792,13 @@ async def update_retention_policy(
         location_event_days=settings_record.location_event_days,
         audit_log_days=settings_record.audit_log_days,
         incident_evidence_days=settings_record.incident_evidence_days,
+        locate_reason_min_length=getattr(settings_record, 'locate_reason_min_length', payload.locate_reason_min_length),
+        require_incident_for_locate=getattr(settings_record, 'require_incident_for_locate', payload.require_incident_for_locate),
+        lock_requires_active_incident=getattr(settings_record, 'lock_requires_active_incident', payload.lock_requires_active_incident),
+        wipe_requires_policy_approval=getattr(settings_record, 'wipe_requires_policy_approval', payload.wipe_requires_policy_approval),
+        wipe_requires_confirmed_stolen=getattr(settings_record, 'wipe_requires_confirmed_stolen', payload.wipe_requires_confirmed_stolen),
+        high_risk_actions_require_two_person=getattr(settings_record, 'high_risk_actions_require_two_person', payload.high_risk_actions_require_two_person),
+        evidence_export_requires_permission=getattr(settings_record, 'evidence_export_requires_permission', payload.evidence_export_requires_permission),
     )
 
 
@@ -1623,6 +1946,137 @@ def _incident_export_response(export, *, bundle_service: EvidenceExportBundleSer
             export_id=export.id,
             org_id=export.org_id,
         ),
+        approval_request_id=export.summary_json.get('approval_request_id'),
+        policy_reason=export.summary_json.get('policy_reason'),
         created_at=export.created_at,
         generated_at=export.generated_at,
+    )
+
+
+async def _apply_approval_decision(
+    *,
+    approval_id: UUID,
+    payload: ApprovalDecisionRequest,
+    principal: Principal,
+    session: AsyncSession,
+    approval_service: ApprovalWorkflowService,
+    case_service: CaseManagementService,
+    case_evidence_service: CaseEvidenceService,
+    bundle_service: EvidenceExportBundleService,
+    spatial_service: SpatialService,
+    audit_log_service: AuditLogService,
+):
+    try:
+        resolution = await approval_service.record_decision(
+            session,
+            approval_id=approval_id,
+            actor_sub=principal.subject,
+            approve=payload.approve,
+            reason=payload.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    approval = resolution.approval
+    _assert_org_access(principal, approval.org_id)
+
+    if resolution.completed:
+        if approval.entity_type == 'remote_action':
+            action = (
+                await session.execute(select(RemoteAction).where(RemoteAction.id == UUID(approval.entity_id)))
+            ).scalar_one_or_none()
+            if action is not None and action.state == RemoteActionState.PENDING_APPROVAL:
+                action.state = RemoteActionState.PENDING
+                action.updated_at = datetime.now(timezone.utc)
+                await session.flush()
+        elif approval.entity_type == 'evidence_export' and approval.incident_id is not None:
+            incident = await case_service.get_case(session, approval.incident_id)
+            export = next(
+                (
+                    item
+                    for item in await case_evidence_service.list_exports(session, incident_id=incident.id)
+                    if str(item.id) == approval.entity_id
+                ),
+                None,
+            )
+            if export is not None and export.status == EvidenceExportStatus.PENDING_APPROVAL:
+                await case_evidence_service.materialize_pending_export(
+                    session,
+                    export=export,
+                    incident=incident,
+                    spatial_service=spatial_service,
+                    bundle_service=bundle_service,
+                )
+
+    if resolution.rejected and approval.entity_type == 'remote_action':
+        action = (
+            await session.execute(select(RemoteAction).where(RemoteAction.id == UUID(approval.entity_id)))
+        ).scalar_one_or_none()
+        if action is not None:
+            action.state = RemoteActionState.FAILED
+            action.last_error = 'Denied by approval workflow'
+            action.updated_at = datetime.now(timezone.utc)
+            await session.flush()
+
+    await audit_log_service.append(
+        session,
+        org_id=str(approval.org_id),
+        actor_sub=principal.subject,
+        action='SENSITIVE_ACTION_APPROVED' if payload.approve else 'SENSITIVE_ACTION_REJECTED',
+        entity_type='sensitive_action_approval',
+        entity_id=str(approval.id),
+        metadata={
+            'action_type': approval.action_type.value,
+            'entity_type': approval.entity_type,
+            'entity_id': approval.entity_id,
+            'reason': payload.reason,
+            'status': approval.status.value,
+        },
+    )
+    await session.commit()
+    return await approval_service.get_approval(session, approval.id)
+
+
+def _policy_decision_response(decision: PolicyDecision) -> PolicyDecisionResponse:
+    return PolicyDecisionResponse(
+        action_type=decision.action_type,
+        allowed=decision.allowed,
+        requires_approval=decision.requires_approval,
+        reason_code=decision.reason_code,
+        reason=decision.reason,
+        required_approvals=decision.required_approvals,
+        owner_subject=decision.owner_subject,
+        incident_state=decision.incident_state,
+    )
+
+
+def _approval_response(approval) -> SensitiveActionApprovalResponse:
+    return SensitiveActionApprovalResponse(
+        approval_id=approval.id,
+        org_id=approval.org_id,
+        action_type=approval.action_type,
+        status=approval.status,
+        entity_type=approval.entity_type,
+        entity_id=approval.entity_id,
+        device_id=approval.device_id,
+        incident_id=approval.incident_id,
+        requested_by_sub=approval.requested_by_sub,
+        request_reason=approval.request_reason,
+        required_approvals=approval.required_approvals,
+        approval_count=sum(1 for item in approval.decisions if item.decision.value == 'approve'),
+        policy_context=approval.policy_context_json,
+        created_at=approval.created_at,
+        updated_at=approval.updated_at,
+        approved_at=approval.approved_at,
+        rejected_at=approval.rejected_at,
+        decisions=[
+            {
+                'approval_decision_id': item.id,
+                'actor_sub': item.actor_sub,
+                'decision': item.decision.value,
+                'reason': item.reason,
+                'created_at': item.created_at,
+            }
+            for item in approval.decisions
+        ],
     )

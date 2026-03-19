@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.services.approval_workflow_service import ApprovalWorkflowService
+from app.services.authorization_policy_service import AuthorizationPolicyService
 from app.services.audit_log_service import AuditLogService
 from app.services.audit_service import AuditService
 from app.services.auth_identity_service import AuthIdentityService
@@ -38,6 +40,14 @@ from app.services.telemetry_service import TelemetryService
 
 def get_audit_service() -> AuditService:
     return AuditService()
+
+
+def get_authorization_policy_service() -> AuthorizationPolicyService:
+    return AuthorizationPolicyService()
+
+
+def get_approval_workflow_service() -> ApprovalWorkflowService:
+    return ApprovalWorkflowService()
 
 
 def get_location_confidence_service() -> LocationConfidenceService:

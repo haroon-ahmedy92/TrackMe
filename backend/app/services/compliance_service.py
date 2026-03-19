@@ -34,6 +34,13 @@ class ComplianceService:
             location_event_days=self.default_location_event_days,
             audit_log_days=self.default_audit_log_days,
             incident_evidence_days=self.default_incident_evidence_days,
+            locate_reason_min_length=self.default_locate_reason_min_length,
+            require_incident_for_locate=False,
+            lock_requires_active_incident=True,
+            wipe_requires_policy_approval=True,
+            wipe_requires_confirmed_stolen=True,
+            high_risk_actions_require_two_person=True,
+            evidence_export_requires_permission=True,
             updated_by_sub=None,
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
@@ -53,6 +60,13 @@ class ComplianceService:
         settings.location_event_days = payload.location_event_days
         settings.audit_log_days = payload.audit_log_days
         settings.incident_evidence_days = payload.incident_evidence_days
+        settings.locate_reason_min_length = payload.locate_reason_min_length
+        settings.require_incident_for_locate = payload.require_incident_for_locate
+        settings.lock_requires_active_incident = payload.lock_requires_active_incident
+        settings.wipe_requires_policy_approval = payload.wipe_requires_policy_approval
+        settings.wipe_requires_confirmed_stolen = payload.wipe_requires_confirmed_stolen
+        settings.high_risk_actions_require_two_person = payload.high_risk_actions_require_two_person
+        settings.evidence_export_requires_permission = payload.evidence_export_requires_permission
         settings.updated_by_sub = actor_sub
         settings.updated_at = datetime.now(timezone.utc)
         await session.flush()
@@ -204,3 +218,7 @@ class ComplianceService:
     @property
     def default_incident_evidence_days(self) -> int:
         return 60
+
+    @property
+    def default_locate_reason_min_length(self) -> int:
+        return 8

@@ -19,6 +19,7 @@ class RemoteActionService:
         payload: RemoteActionCreateRequest,
         *,
         requested_by_sub: str,
+        initial_state: RemoteActionState = RemoteActionState.PENDING,
     ) -> RemoteAction:
         device = (await session.execute(select(Device).where(Device.id == payload.device_id))).scalar_one_or_none()
         if device is None:
@@ -42,7 +43,7 @@ class RemoteActionService:
             device_id=payload.device_id,
             incident_id=payload.incident_id,
             action_kind=payload.action_kind,
-            state=RemoteActionState.PENDING,
+            state=initial_state,
             reason=payload.reason,
             command_payload_json={},
             command_signature='',

@@ -68,6 +68,13 @@ class DeviceAccessPolicyUpdateRequest(BaseModel):
     admin_can_locate: bool = True
     security_operator_can_review: bool = True
     require_access_review: bool = False
+    owner_can_export_evidence: bool = False
+    admin_can_export_evidence: bool = True
+    security_can_export_evidence: bool = True
+    admin_can_lock: bool = True
+    admin_can_wipe: bool = True
+    require_incident_for_locate: bool = False
+    require_two_person_wipe_approval: bool = True
 
 
 class DeviceAccessPolicyResponse(BaseModel):
@@ -78,6 +85,13 @@ class DeviceAccessPolicyResponse(BaseModel):
     admin_can_locate: bool
     security_operator_can_review: bool
     require_access_review: bool
+    owner_can_export_evidence: bool
+    admin_can_export_evidence: bool
+    security_can_export_evidence: bool
+    admin_can_lock: bool
+    admin_can_wipe: bool
+    require_incident_for_locate: bool
+    require_two_person_wipe_approval: bool
     created_at: datetime
     updated_at: datetime
 

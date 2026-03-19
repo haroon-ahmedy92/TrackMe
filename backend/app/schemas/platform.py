@@ -6,11 +6,13 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.db.models import (
+    ApprovalStatus,
     EvidenceExportFormat,
     EvidenceExportStatus,
     GeofenceEventType,
     IncidentCaseState,
     LocationPrecision,
+    PolicyActionType,
     RemoteActionKind,
     RemoteActionState,
     UserRole,
@@ -262,6 +264,8 @@ class IncidentEvidenceExportResponse(BaseModel):
     redact_fields: list[str] = Field(default_factory=list)
     summary: dict = Field(default_factory=dict)
     download_placeholder: str | None = None
+    approval_request_id: UUID | None = None
+    policy_reason: str | None = None
     created_at: datetime
     generated_at: datetime | None
 
@@ -408,7 +412,54 @@ class RemoteActionResponse(BaseModel):
     action_kind: RemoteActionKind
     state: str
     delayed_until: datetime | None
+    approval_request_id: UUID | None = None
+    policy_reason: str | None = None
     requested_at: datetime
+
+
+class PolicyDecisionResponse(BaseModel):
+    action_type: PolicyActionType
+    allowed: bool
+    requires_approval: bool
+    reason_code: str
+    reason: str
+    required_approvals: int = 0
+    owner_subject: str | None = None
+    incident_state: IncidentCaseState | None = None
+
+
+class ApprovalDecisionRequest(BaseModel):
+    approve: bool
+    reason: str = Field(min_length=4, max_length=280)
+
+
+class ApprovalDecisionEntryResponse(BaseModel):
+    approval_decision_id: UUID
+    actor_sub: str
+    decision: str
+    reason: str
+    created_at: datetime
+
+
+class SensitiveActionApprovalResponse(BaseModel):
+    approval_id: UUID
+    org_id: UUID
+    action_type: PolicyActionType
+    status: ApprovalStatus
+    entity_type: str
+    entity_id: str
+    device_id: UUID | None = None
+    incident_id: UUID | None = None
+    requested_by_sub: str
+    request_reason: str
+    required_approvals: int
+    approval_count: int
+    policy_context: dict = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+    approved_at: datetime | None = None
+    rejected_at: datetime | None = None
+    decisions: list[ApprovalDecisionEntryResponse] = Field(default_factory=list)
 
 
 class AuditLogResponse(BaseModel):

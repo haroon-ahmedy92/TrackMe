@@ -8,7 +8,13 @@ from app.db.models import AccessReviewStatus
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_audit_log_service, get_compliance_service, get_event_publisher_service, get_ownership_access_service
+from app.api.deps import (
+    get_audit_log_service,
+    get_authorization_policy_service,
+    get_compliance_service,
+    get_event_publisher_service,
+    get_ownership_access_service,
+)
 from app.core.security import Principal, Role, require_roles
 from app.db.base import get_db_session
 from app.schemas.ownership import (
@@ -32,6 +38,7 @@ from app.schemas.ownership import (
 )
 from app.schemas.compliance import AccessHistoryEntryResponse, DeprovisionDeviceRequest, DeprovisionDeviceResponse
 from app.services.audit_log_service import AuditLogService
+from app.services.authorization_policy_service import AuthorizationPolicyService
 from app.services.compliance_service import ComplianceService
 from app.services.event_publisher_service import EventPublisherService
 from app.services.ownership_access_service import OwnershipAccessService
@@ -229,6 +236,13 @@ async def update_access_policy(
             'admin_can_locate': policy.admin_can_locate,
             'security_operator_can_review': policy.security_operator_can_review,
             'require_access_review': policy.require_access_review,
+            'owner_can_export_evidence': policy.owner_can_export_evidence,
+            'admin_can_export_evidence': policy.admin_can_export_evidence,
+            'security_can_export_evidence': policy.security_can_export_evidence,
+            'admin_can_lock': policy.admin_can_lock,
+            'admin_can_wipe': policy.admin_can_wipe,
+            'require_incident_for_locate': policy.require_incident_for_locate,
+            'require_two_person_wipe_approval': policy.require_two_person_wipe_approval,
         },
     )
     await session.commit()
@@ -440,20 +454,56 @@ async def locate_device(
     principal: Principal = Depends(require_roles(Role.OWNER, Role.ADMIN, Role.ORG_ADMIN, Role.SUPER_ADMIN)),
     session: AsyncSession = Depends(get_db_session),
     ownership_service: OwnershipAccessService = Depends(get_ownership_access_service),
+    policy_service: AuthorizationPolicyService = Depends(get_authorization_policy_service),
     event_publisher: EventPublisherService = Depends(get_event_publisher_service),
     audit_log_service: AuditLogService = Depends(get_audit_log_service),
 ) -> LocateDeviceResponse:
     _assert_org_access(principal, org_id)
     binding = await ownership_service.get_active_binding(session, device_id)
     owner_subject = await ownership_service.get_owner_subject(session, binding)
-    policy = await ownership_service.get_policy(session, device_id)
-    decision = ownership_service.authorize_locate(
-        principal_roles={role.value for role in principal.roles},
-        principal_subject=principal.subject,
-        owner_subject=owner_subject,
-        policy=policy,
-    )
+    if hasattr(session, 'execute'):
+        try:
+            decision = await policy_service.evaluate_locate(
+                session,
+                org_id=org_id,
+                device_id=device_id,
+                principal=principal,
+                reason=payload.reason,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    else:
+        policy = await ownership_service.get_policy(session, device_id)
+        legacy = ownership_service.authorize_locate(
+            principal_roles={role.value for role in principal.roles},
+            principal_subject=principal.subject,
+            owner_subject=owner_subject,
+            policy=policy,
+        )
+        from types import SimpleNamespace
+        decision = SimpleNamespace(
+            allowed=legacy.allowed,
+            reason_code=legacy.reason,
+            reason=legacy.reason,
+            owner_subject=legacy.owner_subject,
+        )
     action = 'LOCATION_LOOKUP_REQUESTED' if decision.allowed else 'LOCATION_LOOKUP_DENIED'
+    await audit_log_service.append(
+        session,
+        org_id=str(org_id),
+        actor_sub=principal.subject,
+        action='POLICY_LOCATE_ALLOWED' if decision.allowed else 'POLICY_LOCATE_DENIED',
+        entity_type='device',
+        entity_id=str(device_id),
+        metadata={
+            'reason': payload.reason,
+            'authorization_reason': decision.reason_code,
+            'authorization_message': decision.reason,
+            'owner_subject': owner_subject,
+            'device_id': str(device_id),
+            'request_id': getattr(request.state, 'request_id', None),
+        },
+    )
     await audit_log_service.append(
         session,
         org_id=str(org_id),
@@ -463,7 +513,8 @@ async def locate_device(
         entity_id=str(device_id),
         metadata={
             'reason': payload.reason,
-            'authorization_reason': decision.reason,
+            'authorization_reason': decision.reason_code,
+            'authorization_message': decision.reason,
             'owner_subject': owner_subject,
             'result': 'denied' if not decision.allowed else 'requested',
             'device_id': str(device_id),
@@ -671,6 +722,13 @@ def _policy_response(policy) -> DeviceAccessPolicyResponse:
         admin_can_locate=policy.admin_can_locate,
         security_operator_can_review=policy.security_operator_can_review,
         require_access_review=policy.require_access_review,
+        owner_can_export_evidence=getattr(policy, 'owner_can_export_evidence', False),
+        admin_can_export_evidence=getattr(policy, 'admin_can_export_evidence', True),
+        security_can_export_evidence=getattr(policy, 'security_can_export_evidence', True),
+        admin_can_lock=getattr(policy, 'admin_can_lock', True),
+        admin_can_wipe=getattr(policy, 'admin_can_wipe', True),
+        require_incident_for_locate=getattr(policy, 'require_incident_for_locate', False),
+        require_two_person_wipe_approval=getattr(policy, 'require_two_person_wipe_approval', True),
         created_at=policy.created_at,
         updated_at=policy.updated_at,
     )

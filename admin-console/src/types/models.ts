@@ -123,11 +123,13 @@ export interface EvidenceExportRecord {
   incidentId: string;
   requestedBy: string;
   format: 'json' | 'pdf';
-  status: 'generated' | 'failed';
+  status: 'generated' | 'failed' | 'pending_approval';
   reason: string;
   redactFields: string[];
   summary: Record<string, string | number | boolean | null>;
   downloadPlaceholder?: string;
+  approvalRequestId?: string;
+  policyReason?: string;
   createdAt: string;
   generatedAt?: string;
 }
@@ -247,12 +249,23 @@ export interface RemoteActionRecord {
   reason: string;
   deviceOnline: boolean;
   lastCheckInAt: string;
+  approvalRequestId?: string;
+  requiredApprovals?: number;
+  approvalCount?: number;
+  policyReason?: string;
 }
 
 export interface RetentionPolicy {
   locationEventDays: number;
   auditLogDays: number;
   incidentEvidenceDays: number;
+  locateReasonMinLength?: number;
+  requireIncidentForLocate?: boolean;
+  lockRequiresActiveIncident?: boolean;
+  wipeRequiresPolicyApproval?: boolean;
+  wipeRequiresConfirmedStolen?: boolean;
+  highRiskActionsRequireTwoPerson?: boolean;
+  evidenceExportRequiresPermission?: boolean;
 }
 
 export interface PrivacyDefaults {

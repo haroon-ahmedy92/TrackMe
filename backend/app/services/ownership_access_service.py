@@ -175,6 +175,13 @@ class OwnershipAccessService:
                 admin_can_locate=True,
                 security_operator_can_review=True,
                 require_access_review=False,
+                owner_can_export_evidence=token.ownership_type == OwnershipType.SINGLE_USER,
+                admin_can_export_evidence=True,
+                security_can_export_evidence=True,
+                admin_can_lock=True,
+                admin_can_wipe=True,
+                require_incident_for_locate=False,
+                require_two_person_wipe_approval=True,
                 created_at=now,
                 updated_at=now,
             )
@@ -185,6 +192,11 @@ class OwnershipAccessService:
             policy.owner_can_locate = token.ownership_type == OwnershipType.SINGLE_USER
             policy.admin_can_locate = True
             policy.security_operator_can_review = True
+            policy.owner_can_export_evidence = token.ownership_type == OwnershipType.SINGLE_USER
+            policy.admin_can_export_evidence = True
+            policy.security_can_export_evidence = True
+            policy.admin_can_lock = True
+            policy.admin_can_wipe = True
             policy.updated_at = now
 
         await session.execute(
@@ -263,6 +275,13 @@ class OwnershipAccessService:
                 admin_can_locate=payload.admin_can_locate,
                 security_operator_can_review=payload.security_operator_can_review,
                 require_access_review=payload.require_access_review,
+                owner_can_export_evidence=payload.owner_can_export_evidence,
+                admin_can_export_evidence=payload.admin_can_export_evidence,
+                security_can_export_evidence=payload.security_can_export_evidence,
+                admin_can_lock=payload.admin_can_lock,
+                admin_can_wipe=payload.admin_can_wipe,
+                require_incident_for_locate=payload.require_incident_for_locate,
+                require_two_person_wipe_approval=payload.require_two_person_wipe_approval,
                 created_at=now,
                 updated_at=now,
             )
@@ -272,6 +291,13 @@ class OwnershipAccessService:
             policy.admin_can_locate = payload.admin_can_locate
             policy.security_operator_can_review = payload.security_operator_can_review
             policy.require_access_review = payload.require_access_review
+            policy.owner_can_export_evidence = payload.owner_can_export_evidence
+            policy.admin_can_export_evidence = payload.admin_can_export_evidence
+            policy.security_can_export_evidence = payload.security_can_export_evidence
+            policy.admin_can_lock = payload.admin_can_lock
+            policy.admin_can_wipe = payload.admin_can_wipe
+            policy.require_incident_for_locate = payload.require_incident_for_locate
+            policy.require_two_person_wipe_approval = payload.require_two_person_wipe_approval
             policy.updated_at = now
         await session.flush()
         return policy

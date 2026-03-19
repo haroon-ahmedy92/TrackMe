@@ -10,6 +10,13 @@ class RetentionPolicyResponse(BaseModel):
     location_event_days: int
     audit_log_days: int
     incident_evidence_days: int
+    locate_reason_min_length: int = 8
+    require_incident_for_locate: bool = False
+    lock_requires_active_incident: bool = True
+    wipe_requires_policy_approval: bool = True
+    wipe_requires_confirmed_stolen: bool = True
+    high_risk_actions_require_two_person: bool = True
+    evidence_export_requires_permission: bool = True
 
 
 class PrivacyDefaultsResponse(BaseModel):
@@ -36,6 +43,13 @@ class RetentionPolicyUpdateRequest(BaseModel):
     location_event_days: int = Field(ge=7, le=365)
     audit_log_days: int = Field(ge=30, le=730)
     incident_evidence_days: int = Field(ge=14, le=730)
+    locate_reason_min_length: int = Field(default=8, ge=4, le=64)
+    require_incident_for_locate: bool = False
+    lock_requires_active_incident: bool = True
+    wipe_requires_policy_approval: bool = True
+    wipe_requires_confirmed_stolen: bool = True
+    high_risk_actions_require_two_person: bool = True
+    evidence_export_requires_permission: bool = True
     reason: str = Field(min_length=8, max_length=280)
 
 
