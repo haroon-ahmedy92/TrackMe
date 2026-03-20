@@ -11,9 +11,11 @@ import type {
   CaseNoteRecord,
   DeviceClusterRecord,
   DeviceRecord,
+  EvidenceShareRecord,
   EvidenceExportRecord,
   GeofenceRecord,
   GeofenceEventRecord,
+  IncidentFilters,
   IncidentRecord,
   IncidentRouteRecord,
   IncidentTimelineEvent,
@@ -186,7 +188,7 @@ const toEvidenceExport = (payload: {
   export_id: string;
   incident_id: string;
   requested_by_sub: string;
-  format: 'json' | 'pdf';
+  format: 'csv' | 'json' | 'pdf';
   status: 'generated' | 'failed' | 'pending_approval';
   reason: string;
   redact_fields: string[];
@@ -210,6 +212,46 @@ const toEvidenceExport = (payload: {
   policyReason: payload.policy_reason ?? undefined,
   createdAt: payload.created_at,
   generatedAt: payload.generated_at ?? undefined,
+});
+
+const toEvidenceShare = (payload: {
+  export_id: string;
+  incident_id: string;
+  recipient_label: string;
+  reason: string;
+  shared_by_sub: string;
+  shared_at: string;
+}): EvidenceShareRecord => ({
+  exportId: payload.export_id,
+  incidentId: payload.incident_id,
+  recipientLabel: payload.recipient_label,
+  reason: payload.reason,
+  sharedBy: payload.shared_by_sub,
+  sharedAt: payload.shared_at,
+});
+
+const toIncident = (payload: {
+  incident_id: string;
+  org_id: string;
+  device_id: string;
+  ticket_reference: string;
+  state: IncidentRecord['state'];
+  assigned_operator_sub?: string | null;
+  recovery_message?: string | null;
+  lost_mode_until?: string | null;
+  created_at: string;
+  updated_at: string;
+}): IncidentRecord => ({
+  id: payload.incident_id,
+  orgId: payload.org_id,
+  deviceId: payload.device_id,
+  title: `Case ${payload.ticket_reference}`,
+  state: payload.state,
+  openedAt: payload.created_at,
+  updatedAt: payload.updated_at,
+  ownerName: payload.assigned_operator_sub ?? 'Unassigned',
+  assignedOperator: payload.assigned_operator_sub ?? undefined,
+  highFrequencyUntil: payload.lost_mode_until ?? undefined,
 });
 
 const toCaseEvidenceEntry = (payload: {
@@ -518,7 +560,60 @@ export const restApiClient: ApiClient = {
     return payload.map(toCluster);
   },
 
-  getIncidents: () => httpClient.get<IncidentRecord[]>(`/platform/incidents?org_id=${encodeURIComponent(orgId())}`),
+  getIncidents: async (filters = {}) => {
+    const query = new URLSearchParams();
+    query.set('org_id', filters.tenantId ?? orgId());
+    if (filters.state && filters.state !== 'ALL') {
+      query.set('incident_state', filters.state);
+    }
+    if (filters.updatedFrom) {
+      query.set('updated_from', filters.updatedFrom);
+    }
+    if (filters.updatedTo) {
+      query.set('updated_to', filters.updatedTo);
+    }
+    if (filters.assignedOperator) {
+      query.set('assigned_operator_sub', filters.assignedOperator);
+    }
+    if (filters.search) {
+      query.set('search', filters.search);
+    }
+    const payload = await httpClient.get<
+      Array<{
+        incident_id: string;
+        org_id: string;
+        device_id: string;
+        ticket_reference: string;
+        state: IncidentRecord['state'];
+        assigned_operator_sub?: string | null;
+        recovery_message?: string | null;
+        lost_mode_until?: string | null;
+        created_at: string;
+        updated_at: string;
+      }>
+    >(`/platform/incidents?${query.toString()}`);
+    return payload.map(toIncident);
+  },
+
+  assignIncident: async (incidentId, payload) => {
+    const incident = await httpClient.post<{
+      incident_id: string;
+      org_id: string;
+      device_id: string;
+      ticket_reference: string;
+      state: IncidentRecord['state'];
+      assigned_operator_sub?: string | null;
+      recovery_message?: string | null;
+      lost_mode_until?: string | null;
+      created_at: string;
+      updated_at: string;
+    }>(`/platform/cases/${incidentId}/assign`, {
+      org_id: orgId(),
+      operator_sub: payload.operatorSub,
+      reason: payload.reason,
+    });
+    return toIncident(incident);
+  },
 
   getIncidentTimeline: (incidentId: string) =>
     httpClient.get<IncidentTimelineEvent[]>(`/platform/cases/${incidentId}/events?org_id=${encodeURIComponent(orgId())}`),
@@ -613,7 +708,7 @@ export const restApiClient: ApiClient = {
         export_id: string;
         incident_id: string;
         requested_by_sub: string;
-        format: 'json' | 'pdf';
+        format: 'csv' | 'json' | 'pdf';
         status: 'generated' | 'failed';
         reason: string;
         redact_fields: string[];
@@ -621,6 +716,65 @@ export const restApiClient: ApiClient = {
         download_placeholder?: string | null;
         created_at: string;
         generated_at?: string | null;
+      }>;
+      location_timeline?: Array<{
+        event_id: string;
+        device_id: string;
+        captured_at: string;
+        latitude: number | null;
+        longitude: number | null;
+        accuracy_meters: number | null;
+        precision: 'precise' | 'moderate' | 'approximate';
+        confidence_score: number;
+        source_label: string;
+        source_methods?: string[];
+        is_ip_approximate?: boolean;
+      }>;
+      audit_trail?: Array<{
+        audit_id?: string;
+        audit_log_id?: string;
+        org_id?: string | null;
+        actor_sub: string;
+        action: string;
+        entity_type: string;
+        entity_id: string;
+        metadata: Record<string, string | number | boolean | null>;
+        occurred_at: string;
+        previous_hash?: string | null;
+        event_hash?: string;
+      }>;
+      command_history?: Array<{
+        remote_action_id: string;
+        action_kind: CaseActionRecord['actionKind'];
+        state: CaseActionRecord['state'];
+        reason: string;
+        requested_by_sub: string;
+        requested_at: string;
+        sent_at?: string | null;
+        delivered_at?: string | null;
+        acked_at?: string | null;
+        failed_at?: string | null;
+        last_error?: string | null;
+      }>;
+      geofence_events?: Array<{
+        geofence_event_id: string;
+        geofence_id: string;
+        geofence_name?: string | null;
+        device_id: string;
+        event_type: 'enter' | 'exit';
+        precision: 'precise' | 'moderate' | 'approximate';
+        confidence_score: number;
+        alert_emitted: boolean;
+        suppressed_reason?: string | null;
+        triggered_at: string;
+      }>;
+      external_shares?: Array<{
+        export_id: string;
+        incident_id: string;
+        recipient_label: string;
+        reason: string;
+        shared_by_sub: string;
+        shared_at: string;
       }>;
       entries: Array<{
         entry_id: string;
@@ -638,10 +792,24 @@ export const restApiClient: ApiClient = {
       incidentState: payload.incident.state as CaseEvidenceChainRecord['incidentState'],
       ticketReference: payload.incident.ticket_reference,
       recoveryMessage: payload.incident.recovery_message,
+      incidentSummary: payload.incident as Record<string, string | number | boolean | null>,
+      locationTimeline: (payload.location_timeline ?? []).map((entry) => toHistoryPoint(camelLocation(entry))),
+      auditTrail: (payload.audit_trail ?? []).map((entry) => ({
+        id: entry.audit_id ?? entry.audit_log_id ?? `${entry.action}-${entry.occurred_at}`,
+        createdAt: entry.occurred_at,
+        actor: entry.actor_sub,
+        action: entry.action,
+        targetType: entry.entity_type,
+        targetId: entry.entity_id,
+        metadata: entry.metadata,
+      })),
+      commandHistory: (payload.command_history ?? payload.actions_taken).map(toCaseAction),
+      geofenceEvents: (payload.geofence_events ?? []).map(toGeofenceEvent),
       actionsTaken: payload.actions_taken.map(toCaseAction),
       notes: payload.notes.map(toCaseNote),
       attachments: payload.attachments.map(toCaseAttachment),
       exports: payload.exports.map(toEvidenceExport),
+      externalShares: (payload.external_shares ?? []).map(toEvidenceShare),
       entries: payload.entries.map(toCaseEvidenceEntry),
     };
   },
@@ -708,7 +876,7 @@ export const restApiClient: ApiClient = {
       export_id: string;
       incident_id: string;
       requested_by_sub: string;
-      format: 'json' | 'pdf';
+      format: 'csv' | 'json' | 'pdf';
       status: 'generated' | 'failed';
       reason: string;
       redact_fields: string[];
@@ -723,6 +891,22 @@ export const restApiClient: ApiClient = {
       redact_fields: payload.redactFields,
     });
     return toEvidenceExport(exportRecord);
+  },
+
+  shareEvidenceExport: async (incidentId, exportId, payload) => {
+    const shareRecord = await httpClient.post<{
+      export_id: string;
+      incident_id: string;
+      recipient_label: string;
+      reason: string;
+      shared_by_sub: string;
+      shared_at: string;
+    }>(`/platform/cases/${incidentId}/exports/${exportId}/share`, {
+      org_id: orgId(),
+      recipient_label: payload.recipientLabel,
+      reason: payload.reason,
+    });
+    return toEvidenceShare(shareRecord);
   },
 
   markDeviceLost: (deviceId: string, reason: string) => httpClient.post<void>(`/platform/devices/${deviceId}/mark-lost`, { reason }),

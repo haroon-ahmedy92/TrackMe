@@ -90,13 +90,24 @@ export interface DeviceRecord {
 
 export interface IncidentRecord {
   id: string;
+  orgId: string;
   deviceId: string;
   title: string;
   state: IncidentState;
   openedAt: string;
   updatedAt: string;
   ownerName: string;
+  assignedOperator?: string;
   highFrequencyUntil?: string;
+}
+
+export interface IncidentFilters {
+  tenantId?: string;
+  state?: IncidentState | 'ALL';
+  updatedFrom?: string;
+  updatedTo?: string;
+  assignedOperator?: string;
+  search?: string;
 }
 
 export interface IncidentTimelineEvent {
@@ -136,7 +147,7 @@ export interface EvidenceExportRecord {
   id: string;
   incidentId: string;
   requestedBy: string;
-  format: 'json' | 'pdf';
+  format: 'csv' | 'json' | 'pdf';
   status: 'generated' | 'failed' | 'pending_approval';
   reason: string;
   redactFields: string[];
@@ -146,6 +157,15 @@ export interface EvidenceExportRecord {
   policyReason?: string;
   createdAt: string;
   generatedAt?: string;
+}
+
+export interface EvidenceShareRecord {
+  exportId: string;
+  incidentId: string;
+  recipientLabel: string;
+  reason: string;
+  sharedBy: string;
+  sharedAt: string;
 }
 
 export interface CaseEvidenceEntryRecord {
@@ -224,10 +244,16 @@ export interface CaseEvidenceChainRecord {
   incidentState: IncidentState;
   ticketReference: string;
   recoveryMessage?: string | null;
+  incidentSummary?: Record<string, string | number | boolean | null>;
+  locationTimeline: LocationHistoryPoint[];
+  auditTrail: AuditLogRecord[];
+  commandHistory: CaseActionRecord[];
+  geofenceEvents: GeofenceEventRecord[];
   actionsTaken: CaseActionRecord[];
   notes: CaseNoteRecord[];
   attachments: CaseAttachmentRecord[];
   exports: EvidenceExportRecord[];
+  externalShares: EvidenceShareRecord[];
   entries: CaseEvidenceEntryRecord[];
 }
 

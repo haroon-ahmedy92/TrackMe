@@ -277,6 +277,7 @@ class GeofenceEventType(str, enum.Enum):
 
 
 class EvidenceExportFormat(str, enum.Enum):
+    CSV = 'csv'
     JSON = 'json'
     PDF = 'pdf'
 
@@ -548,6 +549,7 @@ class Incident(Base):
     __tablename__ = 'incidents'
     __table_args__ = (
         Index('ix_incidents_org_state_updated', 'org_id', 'state', 'updated_at'),
+        Index('ix_incidents_org_assigned_updated', 'org_id', 'assigned_operator_sub', 'updated_at'),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -555,6 +557,7 @@ class Incident(Base):
     device_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('devices.id'), nullable=False)
     ticket_reference: Mapped[str] = mapped_column(String(80), nullable=False)
     state: Mapped[IncidentCaseState] = mapped_column(Enum(IncidentCaseState), nullable=False)
+    assigned_operator_sub: Mapped[str | None] = mapped_column(String(150), nullable=True)
     recovery_message: Mapped[str | None] = mapped_column(String(280), nullable=True)
     elevated_confirmed_by: Mapped[str | None] = mapped_column(String(150), nullable=True)
     lost_mode_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

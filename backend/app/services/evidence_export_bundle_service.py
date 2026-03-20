@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import csv
 import json
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
+from io import StringIO
 from uuid import UUID
 
 from app.core.config import settings
@@ -34,16 +36,30 @@ class EvidenceExportBundleService:
         summary_path = export_dir / f'evidence-summary.{export_record.format.value}'
         manifest_path = export_dir / 'manifest.json'
         bundle_path = export_dir / f'evidence-bundle-{export_record.id}.zip'
+        generated_files: list[tuple[Path, str]] = []
 
         summary_payload = {
+            'incident_summary': chain.get('incident_summary', chain['incident']),
             'incident': chain['incident'],
+            'location_timeline': chain.get('location_timeline', []),
+            'audit_trail': chain.get('audit_trail', []),
+            'command_history': chain.get('command_history', chain['actions_taken']),
+            'geofence_events': chain.get('geofence_events', []),
             'actions_taken': chain['actions_taken'],
             'notes': chain['notes'],
             'attachments': chain['attachments'],
+            'external_shares': chain.get('external_shares', []),
             'entries': chain['entries'],
             'exports': chain['exports'],
         }
-        self._write_summary_file(path=summary_path, export_format=export_record.format.value, summary_payload=summary_payload)
+        generated_files.extend(
+            self._write_summary_files(
+                export_dir=export_dir,
+                summary_path=summary_path,
+                export_format=export_record.format.value,
+                summary_payload=summary_payload,
+            )
+        )
 
         manifest = {
             'export_id': str(export_record.id),
@@ -53,20 +69,20 @@ class EvidenceExportBundleService:
             'status': export_record.status.value,
             'reason': export_record.reason,
             'redact_fields': list(export_record.redact_fields_json.get('fields', [])),
-            'files': [
-                {'name': summary_path.name, 'role': 'summary'},
-                {'name': 'manifest.json', 'role': 'manifest'},
-            ],
+            'files': [{'name': path.name, 'role': role} for path, role in generated_files]
+            + [{'name': 'manifest.json', 'role': 'manifest'}],
         }
         manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding='utf-8')
 
         with zipfile.ZipFile(bundle_path, mode='w', compression=zipfile.ZIP_DEFLATED) as bundle_zip:
-            bundle_zip.write(summary_path, arcname=summary_path.name)
+            for generated_path, _ in generated_files:
+                bundle_zip.write(generated_path, arcname=generated_path.name)
             bundle_zip.write(manifest_path, arcname=manifest_path.name)
 
+        primary_summary_path = generated_files[0][0] if generated_files else summary_path
         return GeneratedEvidenceBundle(
             bundle_path=bundle_path,
-            summary_path=summary_path,
+            summary_path=primary_summary_path,
             manifest_path=manifest_path,
         )
 
@@ -79,26 +95,89 @@ class EvidenceExportBundleService:
     def _export_dir(self, *, org_id: UUID, incident_id: UUID, export_id: UUID) -> Path:
         return Path(settings.exports_storage_dir) / str(org_id) / str(incident_id) / str(export_id)
 
+    def _write_summary_files(
+        self,
+        *,
+        export_dir: Path,
+        summary_path: Path,
+        export_format: str,
+        summary_payload: dict,
+    ) -> list[tuple[Path, str]]:
+        if export_format == 'csv':
+            return self._write_csv_bundle(export_dir=export_dir, summary_payload=summary_payload)
+        self._write_summary_file(path=summary_path, export_format=export_format, summary_payload=summary_payload)
+        return [(summary_path, 'summary')]
+
     def _write_summary_file(self, *, path: Path, export_format: str, summary_payload: dict) -> None:
         if export_format == 'json':
             path.write_text(json.dumps(summary_payload, indent=2, sort_keys=True), encoding='utf-8')
             return
         path.write_bytes(self._build_basic_pdf(summary_payload))
 
+    def _write_csv_bundle(self, *, export_dir: Path, summary_payload: dict) -> list[tuple[Path, str]]:
+        files: list[tuple[Path, str]] = []
+        csv_specs = [
+            ('incident-summary.csv', 'incident_summary', [summary_payload.get('incident_summary', {})]),
+            ('location-timeline.csv', 'location_timeline', summary_payload.get('location_timeline', [])),
+            ('actor-action-audit-trail.csv', 'audit_trail', summary_payload.get('audit_trail', [])),
+            ('command-history.csv', 'command_history', summary_payload.get('command_history', [])),
+            ('geofence-events.csv', 'geofence_events', summary_payload.get('geofence_events', [])),
+            ('notes.csv', 'notes', summary_payload.get('notes', [])),
+            ('attachments.csv', 'attachments', summary_payload.get('attachments', [])),
+            ('external-shares.csv', 'external_shares', summary_payload.get('external_shares', [])),
+        ]
+        for file_name, role, rows in csv_specs:
+            path = export_dir / file_name
+            self._write_csv(path=path, rows=rows)
+            files.append((path, role))
+        return files
+
+    def _write_csv(self, *, path: Path, rows: list[dict]) -> None:
+        flat_rows = [self._flatten_row(row) for row in rows]
+        fieldnames: list[str] = []
+        for row in flat_rows:
+            for key in row.keys():
+                if key not in fieldnames:
+                    fieldnames.append(key)
+        if not fieldnames:
+            fieldnames = ['empty']
+            flat_rows = [{'empty': ''}]
+        buffer = StringIO()
+        writer = csv.DictWriter(buffer, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in flat_rows:
+            writer.writerow(row)
+        path.write_text(buffer.getvalue(), encoding='utf-8')
+
+    def _flatten_row(self, row: dict, *, prefix: str = '') -> dict[str, str]:
+        flattened: dict[str, str] = {}
+        for key, value in row.items():
+            full_key = f'{prefix}{key}' if not prefix else f'{prefix}.{key}'
+            if isinstance(value, dict):
+                flattened.update(self._flatten_row(value, prefix=full_key))
+            elif isinstance(value, list):
+                flattened[full_key] = json.dumps(value, sort_keys=True)
+            else:
+                flattened[full_key] = '' if value is None else str(value)
+        return flattened
+
     # Small no-dependency PDF renderer for evidence summaries.
     def _build_basic_pdf(self, summary_payload: dict) -> bytes:
-        incident = summary_payload.get('incident', {})
+        incident = summary_payload.get('incident_summary', summary_payload.get('incident', {}))
         lines = [
             'TrackMe Evidence Summary',
             '',
             f"Incident ID: {incident.get('incident_id', '-')}",
             f"Ticket Reference: {incident.get('ticket_reference', '-')}",
             f"State: {incident.get('state', '-')}",
+            f"Assigned Operator: {incident.get('assigned_operator_sub') or '-'}",
             f"Recovery Message: {incident.get('recovery_message') or '-'}",
             f"Entries: {len(summary_payload.get('entries', []))}",
+            f"Location Timeline Points: {len(summary_payload.get('location_timeline', []))}",
+            f"Audit Trail Entries: {len(summary_payload.get('audit_trail', []))}",
             f"Notes: {len(summary_payload.get('notes', []))}",
             f"Attachments: {len(summary_payload.get('attachments', []))}",
-            f"Actions Taken: {len(summary_payload.get('actions_taken', []))}",
+            f"Command History: {len(summary_payload.get('command_history', []))}",
             '',
             'Recent Chain Entries:',
         ]

@@ -23,14 +23,16 @@ export default function IncidentsPage() {
   const [windowHours, setWindowHours] = useState('24');
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [modal, setModal] = useState<null | 'markLost' | 'confirmStolen' | 'recover'>(null);
+  const [modal, setModal] = useState<null | 'markLost' | 'confirmStolen' | 'recover' | 'shareExport'>(null);
   const [noteBody, setNoteBody] = useState('');
   const [attachmentName, setAttachmentName] = useState('');
   const [attachmentType, setAttachmentType] = useState('application/pdf');
   const [attachmentSize, setAttachmentSize] = useState('1024');
   const [attachmentDescription, setAttachmentDescription] = useState('');
-  const [exportFormat, setExportFormat] = useState<'json' | 'pdf'>('json');
+  const [exportFormat, setExportFormat] = useState<'csv' | 'json' | 'pdf'>('csv');
   const [redactionFields, setRedactionFields] = useState('latitude,longitude');
+  const [shareRecipient, setShareRecipient] = useState('Regional legal desk');
+  const [shareTargetExportId, setShareTargetExportId] = useState<string | null>(null);
 
   const incidents = incidentsState.data ?? [];
   const devices = devicesState.data ?? [];
@@ -234,6 +236,9 @@ export default function IncidentsPage() {
             <p className="text-muted" style={{ marginTop: 10 }}>
               Actor attribution, exports, notes, and command attempts stay visible for review.
             </p>
+            <p className="text-muted" style={{ marginTop: 8, marginBottom: 0 }}>
+              Assigned operator: <strong>{selectedIncident.assignedOperator ?? 'Unassigned'}</strong>
+            </p>
             <div className="row" style={{ marginTop: 10 }}>
               <Button variant="danger" onClick={() => setModal('confirmStolen')} disabled={selectedIncident.state !== 'SUSPECTED_LOST'}>
                 Confirm Stolen
@@ -382,27 +387,59 @@ export default function IncidentsPage() {
               <Select
                 label="Export format"
                 value={exportFormat}
-                onChange={(event) => setExportFormat(event.target.value as 'json' | 'pdf')}
+                onChange={(event) => setExportFormat(event.target.value as 'csv' | 'json' | 'pdf')}
                 options={[
-                  { label: 'JSON summary placeholder', value: 'json' },
+                  { label: 'CSV export package', value: 'csv' },
+                  { label: 'JSON export package', value: 'json' },
                   { label: 'PDF summary placeholder', value: 'pdf' },
                 ]}
               />
               <Input label="Redact fields" value={redactionFields} onChange={(event) => setRedactionFields(event.target.value)} />
+              <Input
+                label="External share recipient"
+                value={shareRecipient}
+                onChange={(event) => setShareRecipient(event.target.value)}
+              />
               <Button onClick={() => void submitExport()} disabled={actionLoading}>
                 Request Evidence Export
               </Button>
               {(evidenceState.data?.exports ?? []).map((item) => (
                 <div key={item.id} className="warning-note">
-                  {item.format.toUpperCase()} export • {item.status}
-                  {item.policyReason ? ` • ${item.policyReason}` : ''} •{' '}
-                  {item.downloadPlaceholder ? (
-                    <a href={item.downloadPlaceholder} style={{ color: 'inherit' }}>
-                      download bundle
-                    </a>
-                  ) : (
-                    item.status === 'pending_approval' ? 'awaiting approval' : 'placeholder only'
-                  )}
+                  <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>
+                      {item.format.toUpperCase()} export • {item.status}
+                      {item.policyReason ? ` • ${item.policyReason}` : ''}
+                    </span>
+                    <div className="row">
+                      {item.downloadPlaceholder ? (
+                        <a href={item.downloadPlaceholder} style={{ color: 'inherit' }}>
+                          download bundle
+                        </a>
+                      ) : (
+                        <span>{item.status === 'pending_approval' ? 'awaiting approval' : 'placeholder only'}</span>
+                      )}
+                      {item.downloadPlaceholder ? (
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            if (!shareRecipient.trim()) {
+                              setActionError('Enter the external recipient before sharing an export.');
+                              return;
+                            }
+                            setShareTargetExportId(item.id);
+                            setModal('shareExport');
+                          }}
+                        >
+                          Share externally
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {(evidenceState.data?.externalShares ?? []).map((share) => (
+                <div key={`${share.exportId}-${share.sharedAt}`} className="warning-note">
+                  Shared with {share.recipientLabel} • {formatDateTime(share.sharedAt)} • {share.sharedBy}
                 </div>
               ))}
             </div>
@@ -438,6 +475,25 @@ export default function IncidentsPage() {
           </div>
         </Card>
       ) : null}
+
+      <SensitiveActionModal
+        open={modal === 'shareExport'}
+        title="Share Evidence Export Externally"
+        description="External sharing requires a specific reason and is recorded in immutable audit logs."
+        confirmLabel="Share Export"
+        danger
+        loading={actionLoading}
+        onCancel={() => setModal(null)}
+        onConfirm={async (reason) => {
+          if (!selectedIncident || !shareTargetExportId) return;
+          await runAction(async () => {
+            await apiClient.shareEvidenceExport(selectedIncident.id, shareTargetExportId, {
+              recipientLabel: shareRecipient,
+              reason,
+            });
+          });
+        }}
+      />
 
       <SensitiveActionModal
         open={modal === 'markLost'}

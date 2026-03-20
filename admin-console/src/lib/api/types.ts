@@ -6,9 +6,11 @@ import type {
   CaseNoteRecord,
   DeviceClusterRecord,
   DeviceRecord,
+  EvidenceShareRecord,
   EvidenceExportRecord,
   GeofenceRecord,
   GeofenceEventRecord,
+  IncidentFilters,
   IncidentRecord,
   IncidentRouteRecord,
   IncidentTimelineEvent,
@@ -33,7 +35,8 @@ export interface ApiClient {
   getDeviceAccessHistory(deviceId: string): Promise<AccessHistoryRecord[]>;
   getLocationHistory(deviceId: string, windowHours?: number): Promise<LocationHistoryPoint[]>;
   getDeviceClusters(windowHours?: number, cellSizeMeters?: number): Promise<DeviceClusterRecord[]>;
-  getIncidents(): Promise<IncidentRecord[]>;
+  getIncidents(filters?: IncidentFilters): Promise<IncidentRecord[]>;
+  assignIncident(incidentId: string, payload: { operatorSub: string; reason: string }): Promise<IncidentRecord>;
   getIncidentTimeline(incidentId: string): Promise<IncidentTimelineEvent[]>;
   getIncidentRoute(incidentId: string, windowHours?: number): Promise<IncidentRouteRecord>;
   getCaseEvidenceChain(incidentId: string, redactFields?: string[]): Promise<CaseEvidenceChainRecord>;
@@ -45,8 +48,13 @@ export interface ApiClient {
   ): Promise<CaseAttachmentRecord>;
   requestEvidenceExport(
     incidentId: string,
-    payload: { format: 'json' | 'pdf'; reason: string; redactFields: string[] },
+    payload: { format: 'csv' | 'json' | 'pdf'; reason: string; redactFields: string[] },
   ): Promise<EvidenceExportRecord>;
+  shareEvidenceExport(
+    incidentId: string,
+    exportId: string,
+    payload: { recipientLabel: string; reason: string },
+  ): Promise<EvidenceShareRecord>;
   markDeviceLost(deviceId: string, reason: string): Promise<void>;
   confirmDeviceStolen(incidentId: string, reason: string): Promise<void>;
   recoverIncident(incidentId: string, reason: string): Promise<void>;

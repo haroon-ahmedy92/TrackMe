@@ -69,6 +69,8 @@ from app.schemas.platform import (
     DeviceResponse,
     EnrollmentCreateRequest,
     EnrollmentResponse,
+    EvidenceShareRequest,
+    EvidenceShareResponse,
     IncidentAttachmentCreateRequest,
     IncidentAttachmentResponse,
     GeofenceCreateRequest,
@@ -76,6 +78,7 @@ from app.schemas.platform import (
     GeofenceResponse,
     GeofenceUpdateRequest,
     IncidentCreateRequest,
+    IncidentAssignmentRequest,
     IncidentEvidenceExportRequest,
     IncidentEvidenceExportResponse,
     IncidentEventResponse,
@@ -603,13 +606,59 @@ async def open_case(
 @router.get('/incidents', response_model=list[IncidentResponse])
 async def list_cases(
     org_id: UUID = Query(...),
+    incident_state: str | None = Query(default=None),
+    updated_from: datetime | None = Query(default=None),
+    updated_to: datetime | None = Query(default=None),
+    assigned_operator_sub: str | None = Query(default=None),
+    search: str | None = Query(default=None),
     principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.OWNER, Role.AUDITOR)),
     session: AsyncSession = Depends(get_db_session),
     case_evidence_service: CaseEvidenceService = Depends(get_case_evidence_service),
 ) -> list[IncidentResponse]:
     _assert_org_access(principal, org_id)
-    incidents = await case_evidence_service.list_cases(session, org_id=org_id)
+    incidents = await case_evidence_service.list_cases(
+        session,
+        org_id=org_id,
+        state=incident_state,
+        updated_from=updated_from,
+        updated_to=updated_to,
+        assigned_operator_sub=assigned_operator_sub,
+        search=search,
+    )
     return [_incident_response(incident) for incident in incidents]
+
+
+@router.post('/cases/{incident_id}/assign', response_model=IncidentResponse)
+async def assign_case(
+    incident_id: UUID,
+    payload: IncidentAssignmentRequest,
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY)),
+    session: AsyncSession = Depends(get_db_session),
+    service: CaseManagementService = Depends(get_case_management_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> IncidentResponse:
+    incident = await service.get_case(session, incident_id)
+    _assert_org_access(principal, payload.org_id)
+    if incident.org_id != payload.org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Tenant access denied')
+    incident = await service.assign_case(
+        session,
+        incident_id=incident_id,
+        operator_sub=payload.operator_sub,
+        reason=payload.reason,
+        actor_sub=principal.subject,
+    )
+    await audit_log_service.append(
+        session,
+        org_id=str(payload.org_id),
+        actor_sub=principal.subject,
+        action='INCIDENT_ASSIGNED_OPERATOR',
+        entity_type='incident',
+        entity_id=str(incident.id),
+        metadata={'assigned_operator_sub': payload.operator_sub, 'reason': payload.reason},
+    )
+    await session.commit()
+    return _incident_response(incident)
 
 
 @router.post('/cases/{incident_id}/confirm-stolen', response_model=IncidentResponse)
@@ -1010,6 +1059,80 @@ async def create_case_export(
     return _incident_export_response(export, bundle_service=bundle_service)
 
 
+@router.post('/cases/{incident_id}/exports/{export_id}/share', response_model=EvidenceShareResponse)
+async def share_case_export(
+    incident_id: UUID,
+    export_id: UUID,
+    payload: EvidenceShareRequest,
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.OWNER, Role.AUDITOR)),
+    session: AsyncSession = Depends(get_db_session),
+    service: CaseManagementService = Depends(get_case_management_service),
+    case_evidence_service: CaseEvidenceService = Depends(get_case_evidence_service),
+    policy_service: AuthorizationPolicyService = Depends(get_authorization_policy_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> EvidenceShareResponse:
+    incident = await service.get_case(session, incident_id)
+    _assert_org_access(principal, payload.org_id)
+    if incident.org_id != payload.org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Tenant access denied')
+    export = next(
+        (item for item in await case_evidence_service.list_exports(session, incident_id=incident.id) if item.id == export_id),
+        None,
+    )
+    if export is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Unknown export_id')
+    policy_decision = await policy_service.evaluate_evidence_export(
+        session,
+        incident=incident,
+        principal=principal,
+        payload=IncidentEvidenceExportRequest(
+            org_id=payload.org_id,
+            format=getattr(export.format, 'value', export.format),
+            reason=payload.reason,
+            redact_fields=list(export.redact_fields_json.get('fields', [])),
+        ),
+    )
+    await audit_log_service.append(
+        session,
+        org_id=str(payload.org_id),
+        actor_sub=principal.subject,
+        action='POLICY_EVIDENCE_SHARE_ALLOWED' if policy_decision.allowed else 'POLICY_EVIDENCE_SHARE_DENIED',
+        entity_type='evidence_export',
+        entity_id=str(export.id),
+        metadata={
+            'incident_id': str(incident.id),
+            'recipient_label': payload.recipient_label,
+            'reason': payload.reason,
+            'decision_reason_code': policy_decision.reason_code,
+            'decision_reason': policy_decision.reason,
+        },
+    )
+    if not policy_decision.allowed:
+        await session.commit()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=policy_decision.reason)
+    share_record = await case_evidence_service.record_external_share(
+        session,
+        export=export,
+        payload=payload,
+        actor_sub=principal.subject,
+    )
+    await audit_log_service.append(
+        session,
+        org_id=str(payload.org_id),
+        actor_sub=principal.subject,
+        action='CASE_EVIDENCE_EXPORT_SHARED_EXTERNALLY',
+        entity_type='evidence_export',
+        entity_id=str(export.id),
+        metadata={
+            'incident_id': str(incident.id),
+            'recipient_label': payload.recipient_label,
+            'reason': payload.reason,
+        },
+    )
+    await session.commit()
+    return EvidenceShareResponse.model_validate(share_record)
+
+
 @router.get('/cases/{incident_id}/exports/{export_id}/download')
 async def download_case_export(
     incident_id: UUID,
@@ -1077,10 +1200,16 @@ async def case_evidence_chain(
     )
     return CaseEvidenceChainResponse(
         incident=IncidentResponse.model_validate(chain['incident']),
+        incident_summary=chain.get('incident_summary', {}),
+        location_timeline=[LocationEventPointResponse.model_validate(point) for point in chain.get('location_timeline', [])],
+        audit_trail=[AuditLogResponse.model_validate(entry) for entry in chain.get('audit_trail', [])],
+        command_history=[IncidentRemoteActionEvidenceResponse.model_validate(action) for action in chain.get('command_history', [])],
+        geofence_events=[GeofenceEventResponse.model_validate(entry) for entry in chain.get('geofence_events', [])],
         actions_taken=[IncidentRemoteActionEvidenceResponse.model_validate(action) for action in chain['actions_taken']],
         notes=[IncidentNoteResponse.model_validate(note) for note in chain['notes']],
         attachments=[IncidentAttachmentResponse.model_validate(attachment) for attachment in chain['attachments']],
         exports=[IncidentEvidenceExportResponse.model_validate(export) for export in chain['exports']],
+        external_shares=[EvidenceShareResponse.model_validate(entry) for entry in chain.get('external_shares', [])],
         entries=[CaseEvidenceEntryResponse.model_validate(entry) for entry in chain['entries']],
     )
 
@@ -1917,7 +2046,8 @@ def _incident_response(incident) -> IncidentResponse:
         org_id=incident.org_id,
         device_id=incident.device_id,
         ticket_reference=incident.ticket_reference,
-        state=incident.state,
+        state=getattr(incident.state, 'value', incident.state),
+        assigned_operator_sub=getattr(incident, 'assigned_operator_sub', None),
         recovery_message=incident.recovery_message,
         lost_mode_until=incident.lost_mode_until,
         wipe_scheduled_at=incident.wipe_scheduled_at,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import zipfile
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from uuid import uuid4
@@ -50,6 +51,22 @@ class FakeCaseManagementService:
             device_id=self.device_id,
             ticket_reference='CASE-102',
             state=SimpleNamespace(value='suspected_lost'),
+            assigned_operator_sub='operator.one@example.com',
+            recovery_message='Please return to operations desk',
+            lost_mode_until=None,
+            wipe_scheduled_at=None,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+
+    async def assign_case(self, session, *, incident_id, operator_sub, reason, actor_sub):
+        return SimpleNamespace(
+            id=incident_id,
+            org_id=self.org_id,
+            device_id=self.device_id,
+            ticket_reference='CASE-102',
+            state=SimpleNamespace(value='suspected_lost'),
+            assigned_operator_sub=operator_sub,
             recovery_message='Please return to operations desk',
             lost_mode_until=None,
             wipe_scheduled_at=None,
@@ -62,7 +79,7 @@ class FakeCaseEvidenceService:
     def __init__(self) -> None:
         self.org_id = uuid4()
 
-    async def list_cases(self, session, *, org_id):
+    async def list_cases(self, session, *, org_id, **kwargs):
         return [
             SimpleNamespace(
                 id=uuid4(),
@@ -70,6 +87,7 @@ class FakeCaseEvidenceService:
                 device_id=uuid4(),
                 ticket_reference='CASE-102',
                 state=SimpleNamespace(value='suspected_lost'),
+                assigned_operator_sub='operator.one@example.com',
                 recovery_message='Please return to desk',
                 lost_mode_until=None,
                 wipe_scheduled_at=None,
@@ -178,6 +196,16 @@ class FakeCaseEvidenceService:
             generated_at=datetime.now(timezone.utc),
         )
 
+    async def record_external_share(self, session, *, export, payload, actor_sub):
+        return {
+            'export_id': str(export.id),
+            'incident_id': str(export.incident_id),
+            'recipient_label': payload.recipient_label,
+            'reason': payload.reason,
+            'shared_by_sub': actor_sub,
+            'shared_at': datetime.now(timezone.utc).isoformat(),
+        }
+
     async def build_chain(self, session, *, incident, redact_fields, spatial_service):
         now = datetime.now(timezone.utc).isoformat()
         return {
@@ -187,12 +215,79 @@ class FakeCaseEvidenceService:
                 'device_id': str(incident.device_id),
                 'ticket_reference': 'CASE-102',
                 'state': 'suspected_lost',
+                'assigned_operator_sub': 'operator.one@example.com',
                 'recovery_message': 'Please return to operations desk',
                 'lost_mode_until': None,
                 'wipe_scheduled_at': None,
                 'created_at': now,
                 'updated_at': now,
             },
+            'incident_summary': {
+                'incident_id': str(incident.id),
+                'ticket_reference': 'CASE-102',
+                'state': 'suspected_lost',
+                'assigned_operator_sub': 'operator.one@example.com',
+            },
+            'location_timeline': [
+                {
+                    'event_id': str(uuid4()),
+                    'device_id': str(incident.device_id),
+                    'captured_at': now,
+                    'latitude': '[REDACTED]' if 'latitude' in redact_fields else -6.8,
+                    'longitude': '[REDACTED]' if 'longitude' in redact_fields else 39.2,
+                    'accuracy_meters': 120.0,
+                    'precision': 'approximate',
+                    'confidence_score': 24,
+                    'source_methods': ['ip_geolocation'],
+                    'is_ip_approximate': True,
+                    'source_label': 'Backend IP geolocation fallback',
+                    'approximate_label': 'Approximate source only',
+                    'staleness_label': 'Historical timeline point',
+                }
+            ],
+            'audit_trail': [
+                {
+                    'audit_id': str(uuid4()),
+                    'org_id': str(incident.org_id),
+                    'actor_sub': 'auditor@example.com',
+                    'action': 'CASE_EVIDENCE_EXPORT_CREATED',
+                    'entity_type': 'evidence_export',
+                    'entity_id': str(uuid4()),
+                    'metadata': {'reason': 'Case handoff'},
+                    'occurred_at': now,
+                    'previous_hash': None,
+                    'event_hash': 'abc123',
+                }
+            ],
+            'command_history': [
+                {
+                    'remote_action_id': str(uuid4()),
+                    'action_kind': 'lock',
+                    'state': 'pending',
+                    'reason': 'Protect data',
+                    'requested_by_sub': 'admin@example.com',
+                    'requested_at': now,
+                    'sent_at': None,
+                    'delivered_at': None,
+                    'acked_at': None,
+                    'failed_at': None,
+                    'last_error': None,
+                }
+            ],
+            'geofence_events': [
+                {
+                    'geofence_event_id': str(uuid4()),
+                    'geofence_id': str(uuid4()),
+                    'geofence_name': 'Depot',
+                    'device_id': str(incident.device_id),
+                    'event_type': 'exit',
+                    'precision': 'moderate',
+                    'confidence_score': 58,
+                    'alert_emitted': True,
+                    'suppressed_reason': None,
+                    'triggered_at': now,
+                }
+            ],
             'actions_taken': [
                 {
                     'remote_action_id': str(uuid4()),
@@ -208,6 +303,7 @@ class FakeCaseEvidenceService:
                     'last_error': None,
                 }
             ],
+            'external_shares': [],
             'notes': [
                 {
                     'note_id': str(uuid4()),
@@ -320,17 +416,72 @@ def test_case_evidence_endpoints_return_chain_notes_and_exports() -> None:
             f'/api/v1/platform/cases/{fake_case_service.incident_id}/exports',
             json={'org_id': org_id, 'format': 'json', 'reason': 'Case handoff', 'redact_fields': ['latitude']},
         )
+        assign_response = client.post(
+            f'/api/v1/platform/cases/{fake_case_service.incident_id}/assign',
+            json={'org_id': org_id, 'operator_sub': 'operator.two@example.com', 'reason': 'Shift handoff'},
+        )
     finally:
         app.dependency_overrides.clear()
 
     assert chain_response.status_code == 200
     assert chain_response.json()['entries'][0]['data']['latitude'] == '[REDACTED]'
+    assert chain_response.json()['location_timeline'][0]['approximate_label'] == 'Approximate source only'
     assert note_response.status_code == 200
     assert attachment_response.status_code == 200
     assert export_response.status_code == 200
+    assert assign_response.status_code == 200
     assert 'CASE_NOTE_CREATED' in fake_audit.actions
     assert 'CASE_ATTACHMENT_ADDED' in fake_audit.actions
     assert 'CASE_EVIDENCE_EXPORT_CREATED' in fake_audit.actions
+    assert 'INCIDENT_ASSIGNED_OPERATOR' in fake_audit.actions
+
+
+def test_case_export_share_requires_reason_and_is_audited() -> None:
+    fake_case_service = FakeCaseManagementService()
+    fake_evidence_service = FakeCaseEvidenceService()
+    fake_audit = FakeAuditLogService()
+    org_id = str(fake_case_service.org_id)
+    from app.db.base import get_db_session
+
+    export_id = uuid4()
+
+    async def _list_exports(session, *, incident_id):
+        return [
+            SimpleNamespace(
+                id=export_id,
+                org_id=fake_case_service.org_id,
+                incident_id=incident_id,
+                requested_by_sub='auditor@example.com',
+                format=SimpleNamespace(value='csv'),
+                status=EvidenceExportStatus.GENERATED,
+                reason='Case handoff',
+                redact_fields_json={'fields': ['latitude', 'longitude']},
+                summary_json={'placeholder': False},
+                created_at=datetime.now(timezone.utc),
+                generated_at=datetime.now(timezone.utc),
+            )
+        ]
+
+    fake_evidence_service.list_exports = _list_exports  # type: ignore[method-assign]
+
+    app.dependency_overrides[get_current_principal] = _override_principal('admin@example.com', [Role.ADMIN], org_id)
+    app.dependency_overrides[get_db_session] = _dummy_db_session
+    app.dependency_overrides[get_case_management_service] = lambda: fake_case_service
+    app.dependency_overrides[get_case_evidence_service] = lambda: fake_evidence_service
+    app.dependency_overrides[get_audit_log_service] = lambda: fake_audit
+    try:
+        client = TestClient(app)
+        response = client.post(
+            f'/api/v1/platform/cases/{fake_case_service.incident_id}/exports/{export_id}/share',
+            json={'org_id': org_id, 'recipient_label': 'Regional legal desk', 'reason': 'Formal external review'},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()['recipient_label'] == 'Regional legal desk'
+    assert 'POLICY_EVIDENCE_SHARE_ALLOWED' in fake_audit.actions
+    assert 'CASE_EVIDENCE_EXPORT_SHARED_EXTERNALLY' in fake_audit.actions
 
 
 def test_case_export_download_returns_zip_bundle(tmp_path) -> None:
@@ -426,3 +577,57 @@ def test_pdf_bundle_generation_writes_pdf_file(tmp_path) -> None:
     assert bundle.summary_path.suffix == '.pdf'
     assert bundle.summary_path.read_bytes().startswith(b'%PDF-')
     assert bundle.bundle_path.exists()
+
+
+def test_csv_bundle_generation_writes_multiple_csv_files(tmp_path) -> None:
+    settings.exports_storage_dir = str(tmp_path)
+    bundle_service = EvidenceExportBundleService()
+    now = datetime.now(timezone.utc)
+    export_record = SimpleNamespace(
+        id=uuid4(),
+        org_id=uuid4(),
+        incident_id=uuid4(),
+        requested_by_sub='auditor@example.com',
+        format=SimpleNamespace(value='csv'),
+        status=EvidenceExportStatus.GENERATED,
+        reason='Case handoff',
+        redact_fields_json={'fields': ['latitude']},
+        summary_json={},
+        created_at=now,
+        generated_at=now,
+    )
+
+    bundle = bundle_service.ensure_bundle(
+        export_record=export_record,
+        chain={
+            'incident_summary': {
+                'incident_id': 'inc-1',
+                'ticket_reference': 'CASE-500',
+                'state': 'confirmed_stolen',
+                'assigned_operator_sub': 'operator@example.com',
+            },
+            'incident': {'incident_id': 'inc-1', 'ticket_reference': 'CASE-500', 'state': 'confirmed_stolen'},
+            'location_timeline': [
+                {
+                    'event_id': 'loc-1',
+                    'precision': 'approximate',
+                    'approximate_label': 'Approximate source only',
+                    'source_label': 'Backend IP geolocation fallback',
+                }
+            ],
+            'audit_trail': [{'action': 'CASE_EVIDENCE_EXPORT_CREATED', 'actor_sub': 'auditor@example.com'}],
+            'command_history': [{'remote_action_id': 'cmd-1', 'action_kind': 'lock'}],
+            'geofence_events': [{'geofence_event_id': 'geo-1', 'event_type': 'exit'}],
+            'actions_taken': [{'remote_action_id': 'cmd-1', 'action_kind': 'lock'}],
+            'notes': [{'note_id': 'note-1', 'body': 'Analyst note'}],
+            'attachments': [{'attachment_id': 'att-1', 'file_name': 'handover.pdf'}],
+            'external_shares': [{'recipient_label': 'Legal', 'reason': 'Review'}],
+            'entries': [{'title': 'Remote lock', 'summary': 'ACKED command'}],
+            'exports': [],
+        },
+    )
+
+    assert bundle.summary_path.name == 'incident-summary.csv'
+    assert bundle.summary_path.read_text(encoding='utf-8').startswith('incident_id')
+    with zipfile.ZipFile(bundle.bundle_path) as archive:
+        assert 'location-timeline.csv' in archive.namelist()

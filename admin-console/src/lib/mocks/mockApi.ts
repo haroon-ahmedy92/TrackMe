@@ -24,9 +24,11 @@ import type {
   CaseNoteRecord,
   DeviceClusterRecord,
   DeviceTrustRecord,
+  EvidenceShareRecord,
   GeofenceRecord,
   GeofenceEventRecord,
   EvidenceExportRecord,
+  IncidentFilters,
   IncidentRecord,
   IncidentRouteRecord,
   LoginRequest,
@@ -203,9 +205,40 @@ export const mockApiClient: ApiClient = {
     return clone(deviceClusters);
   },
 
-  async getIncidents() {
+  async getIncidents(filters: IncidentFilters = {}) {
     await wait();
-    return clone(incidents);
+    return clone(
+      incidents.filter((incident) => {
+        if (filters.tenantId && incident.orgId !== filters.tenantId) return false;
+        if (filters.state && filters.state !== 'ALL' && incident.state !== filters.state) return false;
+        if (filters.assignedOperator && incident.assignedOperator !== filters.assignedOperator) return false;
+        if (filters.updatedFrom && incident.updatedAt < filters.updatedFrom) return false;
+        if (filters.updatedTo && incident.updatedAt > filters.updatedTo) return false;
+        if (filters.search) {
+          const haystack = `${incident.title} ${incident.id} ${incident.assignedOperator ?? ''}`.toLowerCase();
+          if (!haystack.includes(filters.search.toLowerCase())) return false;
+        }
+        return true;
+      }),
+    );
+  },
+
+  async assignIncident(incidentId: string, payload: { operatorSub: string; reason: string }): Promise<IncidentRecord> {
+    await wait();
+    const incident = incidents.find((item) => item.id === incidentId);
+    if (!incident) {
+      throw new ApiError('Incident not found', 404);
+    }
+    incident.assignedOperator = payload.operatorSub;
+    incident.ownerName = payload.operatorSub;
+    incident.updatedAt = new Date().toISOString();
+    appendAudit({
+      action: 'INCIDENT_ASSIGNED_OPERATOR',
+      targetType: 'incident',
+      targetId: incidentId,
+      reason: payload.reason,
+    });
+    return clone(incident);
   },
 
   async getIncidentTimeline(incidentId: string) {
@@ -318,7 +351,7 @@ export const mockApiClient: ApiClient = {
 
   async requestEvidenceExport(
     incidentId: string,
-    payload: { format: 'json' | 'pdf'; reason: string; redactFields: string[] },
+    payload: { format: 'csv' | 'json' | 'pdf'; reason: string; redactFields: string[] },
   ): Promise<EvidenceExportRecord> {
     await wait();
     const record: EvidenceExportRecord = {
@@ -343,6 +376,38 @@ export const mockApiClient: ApiClient = {
     return clone(record);
   },
 
+  async shareEvidenceExport(
+    incidentId: string,
+    exportId: string,
+    payload: { recipientLabel: string; reason: string },
+  ): Promise<EvidenceShareRecord> {
+    await wait();
+    const chain = caseEvidenceChains[incidentId];
+    if (!chain) {
+      throw new ApiError('Evidence chain not found', 404);
+    }
+    const exportRecord = (evidenceExports[incidentId] ?? []).find((item) => item.id === exportId);
+    if (!exportRecord) {
+      throw new ApiError('Export not found', 404);
+    }
+    const share: EvidenceShareRecord = {
+      exportId,
+      incidentId,
+      recipientLabel: payload.recipientLabel,
+      reason: payload.reason,
+      sharedBy: 'web.admin@local',
+      sharedAt: new Date().toISOString(),
+    };
+    chain.externalShares = [share, ...(chain.externalShares ?? [])];
+    appendAudit({
+      action: 'CASE_EVIDENCE_EXPORT_SHARED_EXTERNALLY',
+      targetType: 'evidence_export',
+      targetId: exportId,
+      reason: payload.reason,
+    });
+    return clone(share);
+  },
+
   async markDeviceLost(deviceId: string, reason: string) {
     await wait();
     const device = devices.find((item) => item.id === deviceId);
@@ -357,12 +422,14 @@ export const mockApiClient: ApiClient = {
 
     const incident: IncidentRecord = {
       id: `inc-${Date.now()}`,
+      orgId: 'org-001',
       deviceId,
       title: `${device.deviceName} suspected lost`,
       state: 'SUSPECTED_LOST',
       openedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       ownerName: 'Operations Team',
+      assignedOperator: undefined,
       highFrequencyUntil: new Date(Date.now() + 1000 * 60 * 60 * 12).toISOString(),
     };
 

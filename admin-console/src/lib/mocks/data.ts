@@ -132,12 +132,14 @@ export const mockDevices: DeviceRecord[] = [
 export const mockIncidents: IncidentRecord[] = [
   {
     id: 'inc-102',
+    orgId: 'org-001',
     deviceId: 'dev-002',
     title: 'Field Tablet K3 suspected lost',
     state: 'SUSPECTED_LOST',
     openedAt: '2026-03-09T21:55:00Z',
     updatedAt: '2026-03-10T07:00:00Z',
     ownerName: 'Regional Ops Team',
+    assignedOperator: 'operator.one@org.tz',
     highFrequencyUntil: '2026-03-10T13:55:00Z',
   },
 ];
@@ -471,7 +473,7 @@ export const mockEvidenceExports: Record<string, EvidenceExportRecord[]> = {
       id: 'export-1',
       incidentId: 'inc-102',
       requestedBy: 'auditor@org.tz',
-      format: 'json',
+      format: 'csv',
       status: 'pending_approval',
       reason: 'Share with incident review team',
       redactFields: ['latitude', 'longitude'],
@@ -554,6 +556,34 @@ export const mockCaseEvidenceChains: Record<string, CaseEvidenceChainRecord> = {
     incidentState: 'SUSPECTED_LOST',
     ticketReference: 'CASE-102',
     recoveryMessage: 'Please return this device to the regional operations team.',
+    incidentSummary: {
+      incidentId: 'inc-102',
+      assignedOperator: 'operator.one@org.tz',
+      ticketReference: 'CASE-102',
+      state: 'SUSPECTED_LOST',
+    },
+    locationTimeline: mockLocationHistory['dev-002'],
+    auditTrail: mockAuditLogs,
+    commandHistory: [
+      {
+        id: 'case-action-1',
+        actionKind: 'lock',
+        state: 'pending',
+        reason: 'Protect data',
+        requestedBy: 'ops.admin@org.tz',
+        requestedAt: '2026-03-10T06:45:00Z',
+      },
+      {
+        id: 'case-action-2',
+        actionKind: 'display_recovery_message',
+        state: 'delivered',
+        reason: 'Show return instructions',
+        requestedBy: 'security.lead@org.tz',
+        requestedAt: '2026-03-09T22:03:00Z',
+        deliveredAt: '2026-03-09T22:04:00Z',
+      },
+    ],
+    geofenceEvents: mockGeofenceEvents.filter((event) => event.deviceId === 'dev-002'),
     actionsTaken: [
       {
         id: 'case-action-1',
@@ -576,6 +606,7 @@ export const mockCaseEvidenceChains: Record<string, CaseEvidenceChainRecord> = {
     notes: mockCaseNotes['inc-102'],
     attachments: mockCaseAttachments['inc-102'],
     exports: mockEvidenceExports['inc-102'],
+    externalShares: [],
     entries: mockCaseEvidenceEntries['inc-102'],
   },
 };

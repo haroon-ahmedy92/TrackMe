@@ -29,6 +29,7 @@ class CaseManagementService:
             device_id=payload.device_id,
             ticket_reference=payload.ticket_reference,
             state=IncidentCaseState.SUSPECTED_LOST,
+            assigned_operator_sub=payload.assigned_operator_sub.strip() if payload.assigned_operator_sub else None,
             recovery_message=payload.recovery_message,
             elevated_confirmed_by=None,
             lost_mode_until=payload.lost_mode_until,
@@ -44,8 +45,37 @@ class CaseManagementService:
             incident=incident,
             action='CASE_OPENED',
             summary='Case opened as suspected lost',
-            metadata={'ticket_reference': payload.ticket_reference},
+            metadata={
+                'ticket_reference': payload.ticket_reference,
+                'assigned_operator_sub': incident.assigned_operator_sub,
+            },
         )
+        return incident
+
+    async def assign_case(
+        self,
+        session: AsyncSession,
+        *,
+        incident_id: UUID,
+        operator_sub: str,
+        reason: str,
+        actor_sub: str,
+    ) -> Incident:
+        incident = await self.get_case(session, incident_id)
+        incident.assigned_operator_sub = operator_sub.strip()
+        incident.updated_at = datetime.now(timezone.utc)
+        await self._append_event(
+            session=session,
+            incident=incident,
+            action='CASE_ASSIGNED',
+            summary='Incident assigned to operator',
+            metadata={
+                'operator_sub': incident.assigned_operator_sub,
+                'reason': reason,
+                'actor_sub': actor_sub,
+            },
+        )
+        await session.flush()
         return incident
 
     async def transition_case(

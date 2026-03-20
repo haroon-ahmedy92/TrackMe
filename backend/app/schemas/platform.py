@@ -216,6 +216,7 @@ class IncidentCreateRequest(BaseModel):
     device_id: UUID
     ticket_reference: str = Field(min_length=2, max_length=80)
     recovery_message: str = Field(min_length=2, max_length=280)
+    assigned_operator_sub: str | None = Field(default=None, min_length=2, max_length=150)
     lost_mode_until: datetime | None = None
 
 
@@ -231,11 +232,18 @@ class IncidentResponse(BaseModel):
     device_id: UUID
     ticket_reference: str
     state: IncidentCaseState
+    assigned_operator_sub: str | None = None
     recovery_message: str | None
     lost_mode_until: datetime | None
     wipe_scheduled_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class IncidentAssignmentRequest(BaseModel):
+    org_id: UUID
+    operator_sub: str = Field(min_length=2, max_length=150)
+    reason: str = Field(min_length=4, max_length=280)
 
 
 class IncidentNoteCreateRequest(BaseModel):
@@ -288,6 +296,21 @@ class IncidentEvidenceExportRequest(BaseModel):
     format: EvidenceExportFormat
     reason: str = Field(min_length=2, max_length=280)
     redact_fields: list[str] = Field(default_factory=list)
+
+
+class EvidenceShareRequest(BaseModel):
+    org_id: UUID
+    recipient_label: str = Field(min_length=2, max_length=180)
+    reason: str = Field(min_length=4, max_length=280)
+
+
+class EvidenceShareResponse(BaseModel):
+    export_id: UUID
+    incident_id: UUID
+    recipient_label: str
+    reason: str
+    shared_by_sub: str
+    shared_at: datetime
 
 
 class IncidentEvidenceExportResponse(BaseModel):
@@ -351,14 +374,16 @@ class LocationEventPointResponse(BaseModel):
     event_id: UUID
     device_id: UUID
     captured_at: datetime
-    latitude: float | None
-    longitude: float | None
-    accuracy_meters: float | None
+    latitude: float | str | None
+    longitude: float | str | None
+    accuracy_meters: float | str | None
     precision: LocationPrecision
     confidence_score: int | None
     source_methods: list[str] = Field(default_factory=list)
     is_ip_approximate: bool
     source_label: str
+    approximate_label: str | None = None
+    staleness_label: str | None = None
 
 
 class GeofenceEventResponse(BaseModel):
@@ -422,10 +447,16 @@ class CaseEvidenceEntryResponse(BaseModel):
 
 class CaseEvidenceChainResponse(BaseModel):
     incident: IncidentResponse
+    incident_summary: dict = Field(default_factory=dict)
+    location_timeline: list[LocationEventPointResponse] = Field(default_factory=list)
+    audit_trail: list[AuditLogResponse] = Field(default_factory=list)
+    command_history: list[IncidentRemoteActionEvidenceResponse] = Field(default_factory=list)
+    geofence_events: list[GeofenceEventResponse] = Field(default_factory=list)
     actions_taken: list[IncidentRemoteActionEvidenceResponse] = Field(default_factory=list)
     notes: list[IncidentNoteResponse] = Field(default_factory=list)
     attachments: list[IncidentAttachmentResponse] = Field(default_factory=list)
     exports: list[IncidentEvidenceExportResponse] = Field(default_factory=list)
+    external_shares: list[EvidenceShareResponse] = Field(default_factory=list)
     entries: list[CaseEvidenceEntryResponse] = Field(default_factory=list)
 
 

@@ -12,6 +12,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Device Inventory', href: '/devices' },
+  { label: 'Support Queue', href: '/support' },
   { label: 'Map View', href: '/map' },
   { label: 'Incidents', href: '/incidents' },
   { label: 'Geofences', href: '/geofences' },

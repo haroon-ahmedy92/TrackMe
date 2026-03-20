@@ -45,6 +45,7 @@ The easiest learning path is:
 10. [`docs/device-identity-signed-telemetry.md`](./docs/device-identity-signed-telemetry.md)
 11. [`docs/policy-approvals.md`](./docs/policy-approvals.md)
 12. [`docs/device-trust-signals.md`](./docs/device-trust-signals.md)
+13. [`docs/operator-support-evidence-exports.md`](./docs/operator-support-evidence-exports.md)
 
 The larger test execution plan also lives in [`TEST_STRATEGY.md`](./TEST_STRATEGY.md).
 
