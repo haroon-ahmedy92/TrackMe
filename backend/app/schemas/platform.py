@@ -288,6 +288,8 @@ class IncidentAttachmentResponse(BaseModel):
     sha256: str | None
     description: str | None
     storage_key: str | None
+    storage_backend: str | None = None
+    download_url: str | None = None
     created_at: datetime
 
 
@@ -668,6 +670,9 @@ class IpEnrichmentRequest(BaseModel):
 class IpEnrichmentResponse(BaseModel):
     ip_address: str
     is_approximate: bool
+    provider: str | None = None
+    status: str | None = None
+    reason: str | None = None
     country: str | None
     city: str | None
     latitude: float | None

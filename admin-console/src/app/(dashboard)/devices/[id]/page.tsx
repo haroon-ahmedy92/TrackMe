@@ -13,6 +13,7 @@ import { Select } from '@/components/ui/Select';
 import { apiClient } from '@/lib/api/client';
 import { formatDateTime } from '@/lib/format';
 import { useAsyncData } from '@/lib/hooks/useAsyncData';
+import { freshnessForTimestamp } from '@/lib/maps/provider';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
@@ -265,8 +266,22 @@ export default function DeviceDetailsPage() {
         <div style={{ marginTop: 16 }}>
           <GeoSignalMap
             title="No mappable history for this device yet"
-            points={lastKnownLocation ? [{ id: 'last-known', ...lastKnownLocation, label: device.deviceName }] : []}
-            routePoints={locationHistory}
+            points={
+              lastKnownLocation
+                ? [
+                    {
+                      id: 'last-known',
+                      ...lastKnownLocation,
+                      label: device.deviceName,
+                      freshness: freshnessForTimestamp(lastKnownLocation.collectedAt, !device.online),
+                    },
+                  ]
+                : []
+            }
+            routePoints={locationHistory.map((point) => ({
+              ...point,
+              freshness: freshnessForTimestamp(point.collectedAt),
+            }))}
             geofences={deviceGeofences}
             height={340}
           />

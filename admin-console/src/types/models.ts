@@ -151,7 +151,9 @@ export interface CaseAttachmentRecord {
   byteSize: number;
   sha256?: string;
   description?: string;
+  storageBackend?: string;
   storageKey?: string;
+  downloadUrl?: string;
   createdAt: string;
 }
 

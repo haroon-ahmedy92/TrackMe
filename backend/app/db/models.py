@@ -623,6 +623,7 @@ class IncidentAttachment(Base):
     byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
     sha256: Mapped[str | None] = mapped_column(String(128), nullable=True)
     description: Mapped[str | None] = mapped_column(String(280), nullable=True)
+    storage_backend: Mapped[str | None] = mapped_column(String(32), nullable=True)
     storage_key: Mapped[str | None] = mapped_column(String(220), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

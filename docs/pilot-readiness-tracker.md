@@ -1,6 +1,6 @@
 # Pilot Readiness Tracker
 
-Last updated: 2026-03-24
+Last updated: 2026-03-25
 
 This tracker is the shared source of truth for the current integration pass that turns TrackMe from a strong demo codebase into a pilot-ready product.
 
@@ -11,21 +11,24 @@ This tracker is the shared source of truth for the current integration pass that
 - PostGIS-backed geospatial storage and query layer.
 - Evidence export bundle generation foundation with CSV/JSON and basic PDF summary support.
 - Device identity foundation using Android Keystore-backed signing and backend public-key registration.
+- Provider-backed static map rendering on Android and web with precision/freshness labeling and geofence overlays.
+- Durable object-storage abstraction for incident attachments and evidence bundles, with local development storage and S3-compatible production wiring.
+- Real IP enrichment provider abstraction with cache/rate limiting/fallback behavior and approximate-only labeling.
+- Stronger integrity assessment pipeline with verified/advisory/unavailable/suspicious statuses and honest provider messaging.
 
 ## Incomplete
 
 - Notification escalation is not fully wired to real recipient/device-token resolution.
-- Evidence attachment custody still relies on placeholder storage behavior unless explicitly supplied.
-- Map rendering still needs real provider-backed implementations on Android and web.
-- Integrity and IP enrichment still contain placeholder/advisory paths.
-- Evidence attachment custody still relies on local filesystem/object-storage placeholder behavior.
-- Real provider-backed maps, IP enrichment, and integrity verification are still pending.
+- Interactive map SDK adoption is still pending; the current pilot uses real provider-backed static maps rather than full pan/zoom SDK clients.
+- Integrity verification is still advisory unless a real Play Integrity verifier is configured upstream.
+- Real push notification delivery still depends on valid Firebase project credentials and registered device tokens.
+- Android build validation is currently blocked in this sandbox by Gradle runtime/network constraints, even though the Kotlin tree has been updated to match the new abstractions.
 
 ## Blocked
 
 - None currently blocked by missing repository context.
 - Real push notification delivery still depends on valid Firebase project credentials.
-- Real map rendering will depend on provider credentials and SDK configuration.
+- Interactive map SDK rollout will still depend on provider credentials and mobile/web SDK configuration.
 
 ## Fixed In This Pass
 
@@ -48,24 +51,29 @@ This tracker is the shared source of truth for the current integration pass that
 - Removed fake incident notification tokens and replaced them with explicit internal escalation alerts.
 - Replaced silent FCM no-op behavior with explicit failure logging and failed notification records.
 - Added recent notification/escalation visibility to the operator support dashboard.
+- Replaced the web and Android map placeholders with provider-backed Google/Mapbox static map rendering, while preserving fallback rendering and provider abstraction boundaries.
+- Replaced placeholder evidence custody with object-storage-backed attachment uploads/downloads and durable export bundle storage metadata.
+- Added object storage configuration for local pilot and S3-compatible production deployments.
+- Replaced synthetic IP enrichment with a real provider abstraction, cache, rate limiting, and graceful fallback behavior.
+- Upgraded integrity assessment from placeholder-only verdict mapping to a structured verified/advisory/unavailable/suspicious pipeline.
+- Added environment examples for map providers, storage, IP enrichment, and integrity configuration.
 
 ## Current Priority Queue
 
 ### Production blockers
 
 1. Complete durable attachment custody/storage beyond placeholder-local behavior.
-2. Replace placeholder map rendering with provider-backed implementations on Android and web.
-3. Replace synthetic IP enrichment and placeholder integrity verification with configurable real integrations.
+2. Move from provider-backed static maps to full interactive SDK implementations on Android and web.
+3. Configure and verify real IP enrichment and integrity providers in a deployed environment.
 4. Strengthen the final local pilot runbook and environment setup for end-to-end stack startup.
-5. Reduce remaining operator-facing warnings/noise in the admin console build output.
+5. Validate Android builds in a less restricted environment than this sandbox.
 
 ### Pilot blockers
 
-1. Wire attachment storage to a durable abstraction suitable for pilot evidence handling.
-2. Add provider-backed maps for Android and web.
-3. Replace synthetic IP enrichment and placeholder integrity flows with configurable real integrations.
-4. Finish remaining live-path docs and setup examples.
-5. Tighten remaining operator UX polish and warning cleanup.
+1. Enable real provider credentials for maps, IP enrichment, integrity, and FCM in the pilot environment.
+2. Finish remaining live-path docs and setup examples.
+3. Tighten remaining operator UX polish and warning cleanup.
+4. Decide whether the pilot needs full interactive maps before internet-facing rollout.
 
 ### Non-blocking improvements
 

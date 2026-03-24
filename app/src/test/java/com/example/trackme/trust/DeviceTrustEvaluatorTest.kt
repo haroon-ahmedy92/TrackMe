@@ -20,6 +20,7 @@ class DeviceTrustEvaluatorTest {
                 status = "unavailable",
                 trusted = false,
                 provider = "placeholder",
+                message = "Unavailable in unit test",
             ),
             appSignals = AppTrustSignals(
                 debugBuild = false,
@@ -42,9 +43,10 @@ class DeviceTrustEvaluatorTest {
         val summary = evaluator.assess(
             integritySignal = IntegritySignal(
                 token = "token",
-                status = "trusted_placeholder",
+                status = "verified",
                 trusted = true,
                 provider = "placeholder",
+                message = "Verified in unit test",
             ),
             appSignals = AppTrustSignals(
                 debugBuild = false,

@@ -60,6 +60,7 @@ export interface ApiClient {
     incidentId: string,
     payload: { fileName: string; mediaType: string; byteSize: number; sha256?: string; description?: string },
   ): Promise<CaseAttachmentRecord>;
+  uploadCaseAttachment(incidentId: string, payload: { file: File; description?: string }): Promise<CaseAttachmentRecord>;
   requestEvidenceExport(
     incidentId: string,
     payload: { format: 'csv' | 'json' | 'pdf'; reason: string; redactFields: string[] },

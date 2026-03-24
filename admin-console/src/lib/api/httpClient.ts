@@ -5,14 +5,18 @@ const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000/a
 
 const request = async <T>(input: string, init?: RequestInit): Promise<T> => {
   const token = authStorage.getToken();
+  const headers = new Headers(init?.headers ?? {});
+  const isFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData;
+  if (!isFormData && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
 
   const response = await fetch(`${baseUrl}${input}`, {
     ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(init?.headers ?? {}),
-    },
+    headers,
   });
 
   if (!response.ok) {
@@ -43,5 +47,10 @@ export const httpClient = {
     request<T>(path, {
       method: 'DELETE',
       body: body ? JSON.stringify(body) : undefined,
+    }),
+  postForm: <T>(path: string, body: FormData) =>
+    request<T>(path, {
+      method: 'POST',
+      body,
     }),
 };

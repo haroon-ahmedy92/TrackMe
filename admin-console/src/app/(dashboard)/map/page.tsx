@@ -10,6 +10,7 @@ import { Select } from '@/components/ui/Select';
 import { apiClient } from '@/lib/api/client';
 import { formatDateTime } from '@/lib/format';
 import { useAsyncData } from '@/lib/hooks/useAsyncData';
+import { freshnessForTimestamp } from '@/lib/maps/provider';
 import type { LocationPrecision } from '@/types/models';
 import { useMemo, useState } from 'react';
 
@@ -29,7 +30,7 @@ export default function MapPage() {
     [windowHours],
   );
 
-  const devices = mapState.data?.devices ?? [];
+  const devices = useMemo(() => mapState.data?.devices ?? [], [mapState.data?.devices]);
   const filteredDevices = useMemo(() => {
     if (filter === 'all') {
       return devices;
@@ -67,6 +68,7 @@ export default function MapPage() {
       sourceLabel: device.location.sourceLabel,
       collectedAt: device.location.collectedAt,
       isApproximate: device.location.isApproximate,
+      freshness: freshnessForTimestamp(device.location.collectedAt, !device.online),
     }));
 
   return (

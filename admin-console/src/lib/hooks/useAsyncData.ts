@@ -13,6 +13,7 @@ export const useAsyncData = <T,>(loader: () => Promise<T>, deps: DependencyList 
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const depsKey = JSON.stringify(deps);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -26,11 +27,11 @@ export const useAsyncData = <T,>(loader: () => Promise<T>, deps: DependencyList 
     } finally {
       setLoading(false);
     }
-  }, [loader, ...deps]);
+  }, [loader]);
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, depsKey]);
 
   return { data, loading, error, refresh };
 };

@@ -2,98 +2,132 @@ from __future__ import annotations
 
 import csv
 import json
+import tempfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from io import StringIO
 from uuid import UUID
 
-from app.core.config import settings
 from app.db.models import EvidenceExport
+from app.services.object_storage_service import ObjectStorageService
 
 
 @dataclass(frozen=True)
 class GeneratedEvidenceBundle:
-    bundle_path: Path
-    summary_path: Path
-    manifest_path: Path
+    bundle_storage_key: str
+    bundle_storage_backend: str
+    bundle_file_name: str
+    bundle_media_type: str
+    bundle_local_path: Path | None
+    bundle_byte_size: int
+    summary_file_name: str
+    manifest_file_name: str
+    summary_local_path: Path | None = None
+    manifest_local_path: Path | None = None
+
+    @property
+    def bundle_path(self) -> Path:
+        if self.bundle_local_path is None:
+            raise RuntimeError('Bundle path is not available for this storage backend.')
+        return self.bundle_local_path
+
+    @property
+    def summary_path(self) -> Path:
+        if self.summary_local_path is None:
+            raise RuntimeError('Summary path is not available for this storage backend.')
+        return self.summary_local_path
+
+    @property
+    def manifest_path(self) -> Path:
+        if self.manifest_local_path is None:
+            raise RuntimeError('Manifest path is not available for this storage backend.')
+        return self.manifest_local_path
 
 
 class EvidenceExportBundleService:
-    def ensure_bundle(
+    def __init__(self, *, object_storage_service: ObjectStorageService) -> None:
+        self.object_storage_service = object_storage_service
+
+    async def ensure_bundle(
         self,
         *,
         export_record: EvidenceExport,
         chain: dict,
     ) -> GeneratedEvidenceBundle:
-        export_dir = self._export_dir(
-            org_id=export_record.org_id,
-            incident_id=export_record.incident_id,
-            export_id=export_record.id,
-        )
-        export_dir.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='trackme-export-') as temp_dir_value:
+            export_dir = Path(temp_dir_value)
+            summary_path = export_dir / f'evidence-summary.{export_record.format.value}'
+            manifest_path = export_dir / 'manifest.json'
+            bundle_file_name = f'evidence-bundle-{export_record.id}.zip'
+            bundle_path = export_dir / bundle_file_name
+            generated_files: list[tuple[Path, str]] = []
 
-        summary_path = export_dir / f'evidence-summary.{export_record.format.value}'
-        manifest_path = export_dir / 'manifest.json'
-        bundle_path = export_dir / f'evidence-bundle-{export_record.id}.zip'
-        generated_files: list[tuple[Path, str]] = []
-
-        summary_payload = {
-            'incident_summary': chain.get('incident_summary', chain['incident']),
-            'incident': chain['incident'],
-            'location_timeline': chain.get('location_timeline', []),
-            'audit_trail': chain.get('audit_trail', []),
-            'command_history': chain.get('command_history', chain['actions_taken']),
-            'geofence_events': chain.get('geofence_events', []),
-            'actions_taken': chain['actions_taken'],
-            'notes': chain['notes'],
-            'attachments': chain['attachments'],
-            'external_shares': chain.get('external_shares', []),
-            'entries': chain['entries'],
-            'exports': chain['exports'],
-        }
-        generated_files.extend(
-            self._write_summary_files(
-                export_dir=export_dir,
-                summary_path=summary_path,
-                export_format=export_record.format.value,
-                summary_payload=summary_payload,
+            summary_payload = {
+                'incident_summary': chain.get('incident_summary', chain['incident']),
+                'incident': chain['incident'],
+                'location_timeline': chain.get('location_timeline', []),
+                'audit_trail': chain.get('audit_trail', []),
+                'command_history': chain.get('command_history', chain['actions_taken']),
+                'geofence_events': chain.get('geofence_events', []),
+                'actions_taken': chain['actions_taken'],
+                'notes': chain['notes'],
+                'attachments': chain['attachments'],
+                'external_shares': chain.get('external_shares', []),
+                'entries': chain['entries'],
+                'exports': chain['exports'],
+            }
+            generated_files.extend(
+                self._write_summary_files(
+                    export_dir=export_dir,
+                    summary_path=summary_path,
+                    export_format=export_record.format.value,
+                    summary_payload=summary_payload,
+                )
             )
-        )
 
-        manifest = {
-            'export_id': str(export_record.id),
-            'incident_id': str(export_record.incident_id),
-            'org_id': str(export_record.org_id),
-            'format': export_record.format.value,
-            'status': export_record.status.value,
-            'reason': export_record.reason,
-            'redact_fields': list(export_record.redact_fields_json.get('fields', [])),
-            'files': [{'name': path.name, 'role': role} for path, role in generated_files]
-            + [{'name': 'manifest.json', 'role': 'manifest'}],
-        }
-        manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding='utf-8')
+            manifest = {
+                'export_id': str(export_record.id),
+                'incident_id': str(export_record.incident_id),
+                'org_id': str(export_record.org_id),
+                'format': export_record.format.value,
+                'status': export_record.status.value,
+                'reason': export_record.reason,
+                'redact_fields': list(export_record.redact_fields_json.get('fields', [])),
+                'files': [{'name': path.name, 'role': role} for path, role in generated_files]
+                + [{'name': 'manifest.json', 'role': 'manifest'}],
+            }
+            manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding='utf-8')
 
-        with zipfile.ZipFile(bundle_path, mode='w', compression=zipfile.ZIP_DEFLATED) as bundle_zip:
-            for generated_path, _ in generated_files:
-                bundle_zip.write(generated_path, arcname=generated_path.name)
-            bundle_zip.write(manifest_path, arcname=manifest_path.name)
+            with zipfile.ZipFile(bundle_path, mode='w', compression=zipfile.ZIP_DEFLATED) as bundle_zip:
+                for generated_path, _ in generated_files:
+                    bundle_zip.write(generated_path, arcname=generated_path.name)
+                bundle_zip.write(manifest_path, arcname=manifest_path.name)
 
-        primary_summary_path = generated_files[0][0] if generated_files else summary_path
-        return GeneratedEvidenceBundle(
-            bundle_path=bundle_path,
-            summary_path=primary_summary_path,
-            manifest_path=manifest_path,
-        )
-
-    def bundle_path(self, *, org_id: UUID, incident_id: UUID, export_id: UUID) -> Path:
-        return self._export_dir(org_id=org_id, incident_id=incident_id, export_id=export_id) / f'evidence-bundle-{export_id}.zip'
+            stored = await self.object_storage_service.store_bytes(
+                org_id=str(export_record.org_id),
+                incident_id=str(export_record.incident_id),
+                file_name=bundle_file_name,
+                media_type='application/zip',
+                payload=bundle_path.read_bytes(),
+                object_scope=f'exports/{export_record.id}',
+            )
+            primary_summary_path = generated_files[0][0] if generated_files else summary_path
+            return GeneratedEvidenceBundle(
+                bundle_storage_key=stored.storage_key,
+                bundle_storage_backend=stored.storage_backend,
+                bundle_file_name=stored.file_name,
+                bundle_media_type=stored.media_type,
+                bundle_local_path=stored.local_path,
+                bundle_byte_size=stored.byte_size,
+                summary_file_name=primary_summary_path.name,
+                manifest_file_name=manifest_path.name,
+                summary_local_path=primary_summary_path,
+                manifest_local_path=manifest_path,
+            )
 
     def download_url(self, *, incident_id: UUID, export_id: UUID, org_id: UUID) -> str:
         return f'/api/v1/platform/cases/{incident_id}/exports/{export_id}/download?org_id={org_id}'
-
-    def _export_dir(self, *, org_id: UUID, incident_id: UUID, export_id: UUID) -> Path:
-        return Path(settings.exports_storage_dir) / str(org_id) / str(incident_id) / str(export_id)
 
     def _write_summary_files(
         self,

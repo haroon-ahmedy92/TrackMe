@@ -55,10 +55,10 @@ export default function SupportPage() {
   );
   const notificationsState = useAsyncData(() => apiClient.getNotifications(10), [tenantId]);
 
-  const incidents = incidentsState.data ?? [];
+  const incidents = useMemo(() => incidentsState.data ?? [], [incidentsState.data]);
   const devicesState = useAsyncData(() => apiClient.getDevices(), []);
-  const devices = devicesState.data ?? [];
-  const notifications = notificationsState.data ?? [];
+  const devices = useMemo(() => devicesState.data ?? [], [devicesState.data]);
+  const notifications = useMemo(() => notificationsState.data ?? [], [notificationsState.data]);
   const selectedIncident = useMemo(
     () => incidents.find((incident) => incident.id === selectedIncidentId) ?? incidents[0] ?? null,
     [incidents, selectedIncidentId],

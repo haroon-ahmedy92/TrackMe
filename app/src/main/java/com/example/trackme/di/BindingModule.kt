@@ -57,6 +57,8 @@ import com.example.trackme.location.NetworkContextCollector
 import com.example.trackme.location.WifiRttCapabilityChecker
 import com.example.trackme.telemetry.GzipTelemetryCompressionCodec
 import com.example.trackme.telemetry.TelemetryCompressionCodec
+import com.example.trackme.trust.IntegritySignalProvider
+import com.example.trackme.trust.PlayIntegritySignalProvider
 import com.example.trackme.worker.CheckInScheduler
 import com.example.trackme.worker.CheckInSchedulerImpl
 import com.example.trackme.worker.IncidentActionSchedulerImpl
@@ -135,6 +137,10 @@ abstract class BindingModule {
     @Binds
     @Singleton
     abstract fun bindIntegrityRepository(impl: IntegrityRepositoryImpl): IntegrityRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindIntegritySignalProvider(impl: PlayIntegritySignalProvider): IntegritySignalProvider
 
     @Binds
     @Singleton

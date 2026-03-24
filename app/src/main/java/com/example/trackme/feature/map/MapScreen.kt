@@ -55,7 +55,10 @@ fun MapScreen(
                         body = stringResource(id = R.string.no_location_points_body)
                     )
                 } else {
-                    LocationHistoryMapCard(history = history)
+                    LocationHistoryMapCard(
+                        history = history,
+                        mapProvider = viewModel.mapProvider
+                    )
 
                     SectionCard(
                         title = stringResource(id = R.string.last_known_position_title),

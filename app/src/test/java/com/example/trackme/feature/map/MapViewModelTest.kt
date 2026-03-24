@@ -105,7 +105,11 @@ private class FakeDeviceStateRepository(
 private class FakeMapProvider : MapProvider {
     override val providerName: String = "fake"
 
-    override fun formatMarkerTitle(location: LocationSnapshot): String = "marker"
+    override fun render(history: List<LocationSnapshot>) = com.example.trackme.ui.map.MapRenderSpec(
+        staticMapUrl = null,
+        providerName = providerName,
+        hasLiveProvider = false,
+    )
 }
 
 private class FakeIntegrityRepository : IntegrityRepository {
@@ -114,10 +118,11 @@ private class FakeIntegrityRepository : IntegrityRepository {
         status = "unavailable",
         trusted = false,
         provider = "test",
+        message = "Unavailable in test",
     )
 
     override fun observeIntegritySignal(): Flow<IntegritySignal> = flowOf(
-        IntegritySignal(token = null, status = "unavailable", trusted = false, provider = "test")
+        IntegritySignal(token = null, status = "unavailable", trusted = false, provider = "test", message = "Unavailable in test")
     )
 }
 

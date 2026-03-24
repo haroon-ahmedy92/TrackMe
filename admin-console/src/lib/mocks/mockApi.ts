@@ -55,7 +55,7 @@ let geofences = clone(mockGeofences);
 let auditLogs = clone(mockAuditLogs);
 let remoteActions = clone(mockRemoteActions);
 let settings = clone(mockSettings);
-let notifications: NotificationEventRecord[] = [
+const notifications: NotificationEventRecord[] = [
   {
     id: 'notif-1',
     orgId: 'org-001',
@@ -360,7 +360,9 @@ export const mockApiClient: ApiClient = {
       byteSize: payload.byteSize,
       sha256: payload.sha256,
       description: payload.description,
+      storageBackend: 'mock-local',
       storageKey: `placeholder://incident/${incidentId}/${payload.fileName}`,
+      downloadUrl: '#mock-download',
       createdAt: new Date().toISOString(),
     };
     caseAttachments[incidentId] = [attachment, ...(caseAttachments[incidentId] ?? [])];
@@ -383,6 +385,15 @@ export const mockApiClient: ApiClient = {
     };
     appendAudit({ action: 'CASE_ATTACHMENT_ADDED', targetType: 'incident_attachment', targetId: attachment.id, reason: payload.description ?? payload.fileName });
     return clone(attachment);
+  },
+
+  async uploadCaseAttachment(incidentId: string, payload: { file: File; description?: string }): Promise<CaseAttachmentRecord> {
+    return this.addCaseAttachment(incidentId, {
+      fileName: payload.file.name,
+      mediaType: payload.file.type || 'application/octet-stream',
+      byteSize: payload.file.size,
+      description: payload.description,
+    });
   },
 
   async requestEvidenceExport(

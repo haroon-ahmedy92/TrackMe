@@ -245,6 +245,13 @@ Android now reads these Gradle properties:
 
 - `TRACKME_API_BASE_URL`
 - `TRACKME_COMMAND_VERIFICATION_PUBLIC_KEY_PEM`
+- `TRACKME_MAP_PROVIDER`
+- `TRACKME_GOOGLE_STATIC_MAPS_API_KEY`
+- `TRACKME_MAPBOX_ACCESS_TOKEN`
+- `TRACKME_MAPBOX_USERNAME`
+- `TRACKME_MAPBOX_STYLE_ID`
+
+An example file is available at [`gradle.properties.example`](./gradle.properties.example).
 
 ### Backend
 
@@ -257,6 +264,15 @@ cp .env.example .env
 alembic upgrade head
 uvicorn app.main:app --reload
 ```
+
+Backend provider configuration now also includes:
+
+- object storage backend selection for attachments and export bundles
+- IP enrichment provider configuration
+- integrity verification provider settings
+- FCM server credentials
+
+See [`backend/.env.example`](./backend/.env.example) and [`docs/local-pilot-runbook.md`](./docs/local-pilot-runbook.md).
 
 In another terminal, run the queue/rules worker:
 

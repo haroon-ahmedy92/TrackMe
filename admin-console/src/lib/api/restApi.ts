@@ -168,7 +168,9 @@ const toCaseAttachment = (payload: {
   byte_size: number;
   sha256?: string | null;
   description?: string | null;
+  storage_backend?: string | null;
   storage_key?: string | null;
+  download_url?: string | null;
   created_at: string;
 }): CaseAttachmentRecord => ({
   id: payload.attachment_id,
@@ -179,7 +181,9 @@ const toCaseAttachment = (payload: {
   byteSize: payload.byte_size,
   sha256: payload.sha256 ?? undefined,
   description: payload.description ?? undefined,
+  storageBackend: payload.storage_backend ?? undefined,
   storageKey: payload.storage_key ?? undefined,
+  downloadUrl: payload.download_url ?? undefined,
   createdAt: payload.created_at,
 });
 
@@ -941,7 +945,9 @@ export const restApiClient: ApiClient = {
       byte_size: number;
       sha256?: string | null;
       description?: string | null;
+      storage_backend?: string | null;
       storage_key?: string | null;
+      download_url?: string | null;
       created_at: string;
     }>(`/platform/cases/${incidentId}/attachments`, {
       org_id: orgId(),
@@ -951,6 +957,30 @@ export const restApiClient: ApiClient = {
       sha256: payload.sha256,
       description: payload.description,
     });
+    return toCaseAttachment(attachment);
+  },
+
+  uploadCaseAttachment: async (incidentId, payload) => {
+    const formData = new FormData();
+    formData.append('org_id', orgId());
+    if (payload.description?.trim()) {
+      formData.append('description', payload.description.trim());
+    }
+    formData.append('file', payload.file);
+    const attachment = await httpClient.postForm<{
+      attachment_id: string;
+      incident_id: string;
+      uploaded_by_sub: string;
+      file_name: string;
+      media_type: string;
+      byte_size: number;
+      sha256?: string | null;
+      description?: string | null;
+      storage_backend?: string | null;
+      storage_key?: string | null;
+      download_url?: string | null;
+      created_at: string;
+    }>(`/platform/cases/${incidentId}/attachments/upload`, formData);
     return toCaseAttachment(attachment);
   },
 

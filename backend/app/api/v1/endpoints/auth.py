@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_local_auth_service
 from app.db.base import get_db_session
 from app.schemas.auth import AuthUserProfile, LoginRequest, LoginResponse
-from app.services.local_auth_service import LocalAuthService
+from app.services.operator_auth_provider import OperatorAuthProvider
 
 router = APIRouter(prefix='/auth', tags=['auth'])
 
@@ -15,7 +15,7 @@ router = APIRouter(prefix='/auth', tags=['auth'])
 async def login(
     payload: LoginRequest,
     session: AsyncSession = Depends(get_db_session),
-    auth_service: LocalAuthService = Depends(get_local_auth_service),
+    auth_service: OperatorAuthProvider = Depends(get_local_auth_service),
 ) -> LoginResponse:
     try:
         authenticated = await auth_service.authenticate(

@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 
-type BadgeVariant = 'neutral' | 'success' | 'warning' | 'danger' | 'approximate' | 'moderate' | 'precise';
+type BadgeVariant = 'neutral' | 'success' | 'warning' | 'danger' | 'approximate' | 'moderate' | 'precise' | 'stale' | 'offline';
 
 interface BadgeProps {
   children: React.ReactNode;
@@ -16,6 +16,8 @@ const colorMap: Record<BadgeVariant, string> = {
   approximate: 'var(--approximate)',
   moderate: 'var(--moderate)',
   precise: 'var(--precise)',
+  stale: '#c2410c',
+  offline: '#64748b',
 };
 
 export function Badge({ children, variant = 'neutral', style }: BadgeProps) {

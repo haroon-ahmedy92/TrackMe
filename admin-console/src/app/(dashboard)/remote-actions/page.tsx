@@ -19,7 +19,7 @@ export default function RemoteActionsPage() {
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const actions = actionState.data ?? [];
+  const actions = useMemo(() => actionState.data ?? [], [actionState.data]);
   const selectedAction = useMemo(
     () => actions.find((action) => action.id === selectedId) ?? actions[0] ?? null,
     [actions, selectedId],

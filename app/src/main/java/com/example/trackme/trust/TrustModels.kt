@@ -11,6 +11,7 @@ data class IntegritySignal(
     val status: String,
     val trusted: Boolean,
     val provider: String,
+    val message: String,
 )
 
 data class AppTrustSignals(

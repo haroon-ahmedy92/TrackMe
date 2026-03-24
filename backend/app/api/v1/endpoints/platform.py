@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse, Response
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +26,7 @@ from app.api.deps import (
     get_location_ingestion_service,
     get_notification_event_service,
     get_observability_service,
+    get_object_storage_service,
     get_remote_action_service,
     get_rules_engine_service,
     get_spatial_service,
@@ -131,6 +132,7 @@ from app.services.ip_enrichment_service import IpEnrichmentService
 from app.services.location_ingestion_service import LocationIngestionService
 from app.services.notification_event_service import NotificationEventService
 from app.services.observability_service import ObservabilityService
+from app.services.object_storage_service import ObjectStorageService
 from app.services.remote_action_service import RemoteActionService
 from app.services.rules_engine_service import RulesEngineService
 from app.services.spatial_service import SpatialService
@@ -939,6 +941,114 @@ async def create_case_attachment(
     return _incident_attachment_response(attachment)
 
 
+@router.post('/cases/{incident_id}/attachments/upload', response_model=IncidentAttachmentResponse)
+async def upload_case_attachment(
+    incident_id: UUID,
+    org_id: UUID = Form(...),
+    description: str | None = Form(default=None),
+    file: UploadFile = File(...),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY)),
+    session: AsyncSession = Depends(get_db_session),
+    service: CaseManagementService = Depends(get_case_management_service),
+    case_evidence_service: CaseEvidenceService = Depends(get_case_evidence_service),
+    object_storage_service: ObjectStorageService = Depends(get_object_storage_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> IncidentAttachmentResponse:
+    incident = await service.get_case(session, incident_id)
+    _assert_org_access(principal, org_id)
+    if incident.org_id != org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Tenant access denied')
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Attachment file is empty.')
+    stored = await object_storage_service.store_bytes(
+        org_id=str(org_id),
+        incident_id=str(incident.id),
+        file_name=file.filename or 'attachment.bin',
+        media_type=file.content_type,
+        payload=file_bytes,
+    )
+    attachment = await case_evidence_service.create_attachment(
+        session,
+        incident=incident,
+        payload=IncidentAttachmentCreateRequest(
+            org_id=org_id,
+            file_name=stored.file_name,
+            media_type=stored.media_type,
+            byte_size=stored.byte_size,
+            sha256=stored.sha256,
+            description=description,
+            storage_key=stored.storage_key,
+        ),
+        actor_sub=principal.subject,
+        storage_backend=stored.storage_backend,
+    )
+    await audit_log_service.append(
+        session,
+        org_id=str(org_id),
+        actor_sub=principal.subject,
+        action='CASE_ATTACHMENT_UPLOADED',
+        entity_type='incident_attachment',
+        entity_id=str(attachment.id),
+        metadata={
+            'incident_id': str(incident.id),
+            'file_name': attachment.file_name,
+            'storage_backend': stored.storage_backend,
+        },
+    )
+    await session.commit()
+    return _incident_attachment_response(attachment)
+
+
+@router.get('/cases/{incident_id}/attachments/{attachment_id}/download')
+async def download_case_attachment(
+    incident_id: UUID,
+    attachment_id: UUID,
+    org_id: UUID = Query(...),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.AUDITOR)),
+    session: AsyncSession = Depends(get_db_session),
+    service: CaseManagementService = Depends(get_case_management_service),
+    case_evidence_service: CaseEvidenceService = Depends(get_case_evidence_service),
+    object_storage_service: ObjectStorageService = Depends(get_object_storage_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+):
+    incident = await service.get_case(session, incident_id)
+    _assert_org_access(principal, org_id)
+    if incident.org_id != org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Tenant access denied')
+    try:
+        attachment = await case_evidence_service.get_attachment(session, incident_id=incident.id, attachment_id=attachment_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    path = object_storage_service.resolve_local_path(attachment.storage_key or '')
+    if path is None:
+        payload = await object_storage_service.read_bytes(attachment.storage_key or '')
+        if payload is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Attachment file is not available for download from this backend.')
+        await audit_log_service.append(
+            session,
+            org_id=str(org_id),
+            actor_sub=principal.subject,
+            action='CASE_ATTACHMENT_DOWNLOADED',
+            entity_type='incident_attachment',
+            entity_id=str(attachment.id),
+            metadata={'incident_id': str(incident.id), 'file_name': attachment.file_name},
+        )
+        await session.commit()
+        return Response(content=payload, media_type=attachment.media_type, headers={'Content-Disposition': f'attachment; filename="{attachment.file_name}"'})
+    await audit_log_service.append(
+        session,
+        org_id=str(org_id),
+        actor_sub=principal.subject,
+        action='CASE_ATTACHMENT_DOWNLOADED',
+        entity_type='incident_attachment',
+        entity_id=str(attachment.id),
+        metadata={'incident_id': str(incident.id), 'file_name': attachment.file_name},
+    )
+    await session.commit()
+    return FileResponse(path=path, media_type=attachment.media_type, filename=attachment.file_name)
+
+
 @router.get('/cases/{incident_id}/exports', response_model=list[IncidentEvidenceExportResponse])
 async def list_case_exports(
     incident_id: UUID,
@@ -1145,8 +1255,9 @@ async def download_case_export(
     service: CaseManagementService = Depends(get_case_management_service),
     case_evidence_service: CaseEvidenceService = Depends(get_case_evidence_service),
     bundle_service: EvidenceExportBundleService = Depends(get_evidence_export_bundle_service),
+    object_storage_service: ObjectStorageService = Depends(get_object_storage_service),
     audit_log_service: AuditLogService = Depends(get_audit_log_service),
-) -> FileResponse:
+) -> Response:
     incident = await service.get_case(session, incident_id)
     _assert_org_access(principal, org_id)
     if incident.org_id != org_id:
@@ -1159,9 +1270,11 @@ async def download_case_export(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Unknown export_id')
     if export.status != EvidenceExportStatus.GENERATED:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Export is not ready for download')
-    bundle_path = bundle_service.bundle_path(org_id=incident.org_id, incident_id=incident.id, export_id=export.id)
-    if not bundle_path.exists():
+    bundle_storage_key = export.summary_json.get('bundle_storage_key')
+    bundle_file_name = export.summary_json.get('bundle_file_name') or f'evidence-bundle-{export.id}.zip'
+    if not bundle_storage_key:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Export bundle not generated')
+    bundle_path = object_storage_service.resolve_local_path(bundle_storage_key)
     await audit_log_service.append(
         session,
         org_id=str(org_id),
@@ -1169,13 +1282,18 @@ async def download_case_export(
         action='CASE_EVIDENCE_EXPORT_DOWNLOADED',
         entity_type='evidence_export',
         entity_id=str(export.id),
-        metadata={'incident_id': str(incident.id), 'bundle_name': bundle_path.name},
+        metadata={'incident_id': str(incident.id), 'bundle_name': bundle_file_name},
     )
     await session.commit()
+    if bundle_path is None:
+        payload = await object_storage_service.read_bytes(bundle_storage_key)
+        if payload is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Export bundle not generated')
+        return Response(content=payload, media_type='application/zip', headers={'Content-Disposition': f'attachment; filename="{bundle_file_name}"'})
     return FileResponse(
         path=bundle_path,
         media_type='application/zip',
-        filename=bundle_path.name,
+        filename=bundle_file_name,
     )
 
 
@@ -1772,6 +1890,9 @@ async def ip_enrich(
     return IpEnrichmentResponse(
         ip_address=result.ip_address,
         is_approximate=result.is_approximate,
+        provider=result.provider,
+        status=result.status,
+        reason=result.reason,
         country=result.country,
         city=result.city,
         latitude=result.latitude,
@@ -2142,6 +2263,7 @@ def _incident_note_response(note) -> IncidentNoteResponse:
 
 
 def _incident_attachment_response(attachment) -> IncidentAttachmentResponse:
+    org_id = getattr(attachment, 'org_id', None)
     return IncidentAttachmentResponse(
         attachment_id=attachment.id,
         incident_id=attachment.incident_id,
@@ -2152,6 +2274,12 @@ def _incident_attachment_response(attachment) -> IncidentAttachmentResponse:
         sha256=attachment.sha256,
         description=attachment.description,
         storage_key=attachment.storage_key,
+        storage_backend=getattr(attachment, 'storage_backend', None),
+        download_url=(
+            f'/api/v1/platform/cases/{attachment.incident_id}/attachments/{attachment.id}/download?org_id={org_id}'
+            if org_id is not None
+            else None
+        ),
         created_at=attachment.created_at,
     )
 

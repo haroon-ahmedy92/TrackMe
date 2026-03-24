@@ -14,6 +14,7 @@ import { apiClient } from '@/lib/api/client';
 import { formatDateTime } from '@/lib/format';
 import { useAsyncData } from '@/lib/hooks/useAsyncData';
 import { getCopy } from '@/lib/i18n/copy';
+import { freshnessForTimestamp } from '@/lib/maps/provider';
 import { useMemo, useState } from 'react';
 
 export default function IncidentsPage() {
@@ -27,17 +28,15 @@ export default function IncidentsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [modal, setModal] = useState<null | 'markLost' | 'confirmStolen' | 'recover' | 'shareExport'>(null);
   const [noteBody, setNoteBody] = useState('');
-  const [attachmentName, setAttachmentName] = useState('');
-  const [attachmentType, setAttachmentType] = useState('application/pdf');
-  const [attachmentSize, setAttachmentSize] = useState('1024');
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [attachmentDescription, setAttachmentDescription] = useState('');
   const [exportFormat, setExportFormat] = useState<'csv' | 'json' | 'pdf'>('csv');
   const [redactionFields, setRedactionFields] = useState('latitude,longitude');
   const [shareRecipient, setShareRecipient] = useState('Regional legal desk');
   const [shareTargetExportId, setShareTargetExportId] = useState<string | null>(null);
 
-  const incidents = incidentsState.data ?? [];
-  const devices = devicesState.data ?? [];
+  const incidents = useMemo(() => incidentsState.data ?? [], [incidentsState.data]);
+  const devices = useMemo(() => devicesState.data ?? [], [devicesState.data]);
 
   const selectedIncident = useMemo(
     () => incidents.find((incident) => incident.id === selectedIncidentId) ?? incidents[0] ?? null,
@@ -96,17 +95,15 @@ export default function IncidentsPage() {
   };
 
   const submitAttachment = async () => {
-    if (!selectedIncident || !attachmentName.trim()) {
+    if (!selectedIncident || !attachmentFile) {
       return;
     }
     await runAction(async () => {
-      await apiClient.addCaseAttachment(selectedIncident.id, {
-        fileName: attachmentName.trim(),
-        mediaType: attachmentType.trim(),
-        byteSize: Number(attachmentSize) || 1,
+      await apiClient.uploadCaseAttachment(selectedIncident.id, {
+        file: attachmentFile,
         description: attachmentDescription.trim() || undefined,
       });
-      setAttachmentName('');
+      setAttachmentFile(null);
       setAttachmentDescription('');
     });
   };
@@ -328,8 +325,22 @@ export default function IncidentsPage() {
           <div style={{ marginTop: 16 }}>
             <GeoSignalMap
               title="No route points are available in this time window"
-              routePoints={routeState.data?.points ?? []}
-              points={routeState.data?.points.length ? [routeState.data.points[routeState.data.points.length - 1]] : []}
+              routePoints={(routeState.data?.points ?? []).map((point) => ({
+                ...point,
+                freshness: freshnessForTimestamp(point.collectedAt),
+              }))}
+              points={
+                routeState.data?.points.length
+                  ? [
+                      {
+                        ...routeState.data.points[routeState.data.points.length - 1],
+                        freshness: freshnessForTimestamp(
+                          routeState.data.points[routeState.data.points.length - 1].collectedAt,
+                        ),
+                      },
+                    ]
+                  : []
+              }
               height={340}
             />
           </div>
@@ -363,12 +374,28 @@ export default function IncidentsPage() {
 
           <Card>
             <h2 style={{ marginTop: 0 }}>{ui.incidents.attachmentsTitle}</h2>
-            <Input label={ui.incidents.attachmentName} value={attachmentName} onChange={(event) => setAttachmentName(event.target.value)} />
-            <Input label={ui.incidents.mediaType} value={attachmentType} onChange={(event) => setAttachmentType(event.target.value)} />
-            <Input label={ui.incidents.byteSize} value={attachmentSize} onChange={(event) => setAttachmentSize(event.target.value)} />
+            <label style={{ display: 'grid', gap: 6, color: 'var(--text-muted)', fontSize: 14 }}>
+              Attachment file
+              <input
+                type="file"
+                onChange={(event) => setAttachmentFile(event.target.files?.[0] ?? null)}
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: 12,
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface-subtle)',
+                  color: 'var(--text-primary)',
+                }}
+              />
+            </label>
+            {attachmentFile ? (
+              <p className="text-muted" style={{ margin: '8px 0 0', fontSize: 12 }}>
+                {attachmentFile.name} • {attachmentFile.type || 'application/octet-stream'} • {attachmentFile.size} bytes
+              </p>
+            ) : null}
             <Textarea label={ui.incidents.attachmentDescription} value={attachmentDescription} onChange={(event) => setAttachmentDescription(event.target.value)} />
             <div className="row">
-              <Button onClick={() => void submitAttachment()} disabled={!attachmentName.trim() || actionLoading}>
+              <Button onClick={() => void submitAttachment()} disabled={!attachmentFile || actionLoading}>
                 {ui.incidents.addAttachment}
               </Button>
             </div>
@@ -376,9 +403,18 @@ export default function IncidentsPage() {
             <div className="stack" style={{ marginTop: 14 }}>
               {(evidenceState.data?.attachments ?? []).map((attachment) => (
                 <div key={attachment.id} style={{ borderLeft: '2px solid var(--border)', paddingLeft: 10 }}>
-                  <p style={{ margin: 0, fontWeight: 600 }}>{attachment.fileName}</p>
+                  <p style={{ margin: 0, fontWeight: 600 }}>
+                    {attachment.downloadUrl ? (
+                      <a href={attachment.downloadUrl} style={{ color: 'inherit' }}>
+                        {attachment.fileName}
+                      </a>
+                    ) : (
+                      attachment.fileName
+                    )}
+                  </p>
                   <p className="text-muted" style={{ margin: '4px 0 0', fontSize: 12 }}>
-                    {attachment.mediaType} • {attachment.byteSize} bytes • {formatDateTime(attachment.createdAt)}
+                    {attachment.mediaType} • {attachment.byteSize} bytes • {attachment.storageBackend ?? 'unknown storage'} •{' '}
+                    {formatDateTime(attachment.createdAt)}
                   </p>
                   {attachment.description ? <p style={{ margin: '6px 0 0' }}>{attachment.description}</p> : null}
                 </div>

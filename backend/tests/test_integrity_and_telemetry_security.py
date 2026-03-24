@@ -48,23 +48,32 @@ def _sign_hash(private_key, payload_hash: str) -> str:
     return base64.b64encode(signature).decode('utf-8')
 
 
-def test_integrity_verification_service_trusted_verdicts() -> None:
+def test_integrity_verification_service_maps_basic_integrity_to_advisory() -> None:
     service = IntegrityVerificationService()
     assessment = service.assess('MEETS_BASIC_INTEGRITY')
-    assert assessment.trusted is True
-    assert assessment.status == 'trusted_placeholder'
+    assert assessment.trusted is False
+    assert assessment.status == 'advisory'
 
 
-def test_integrity_verification_service_unavailable_and_untrusted() -> None:
+def test_integrity_verification_service_unavailable_and_suspicious() -> None:
     service = IntegrityVerificationService()
 
     missing = service.assess(None)
     assert missing.trusted is False
     assert missing.status == 'unavailable'
 
-    untrusted = service.assess('DEVICE_COMPROMISED')
-    assert untrusted.trusted is False
-    assert untrusted.status == 'untrusted'
+    suspicious = service.assess('PACKAGE_MISMATCH')
+    assert suspicious.trusted is False
+    assert suspicious.status == 'suspicious'
+
+
+def test_integrity_verification_service_accepts_play_integrity_envelope() -> None:
+    service = IntegrityVerificationService()
+    assessment = service.assess(
+        '{"provider":"play_integrity","deviceRecognitionVerdict":["MEETS_DEVICE_INTEGRITY"],"packageName":"com.example.trackme"}'
+    )
+    assert assessment.status == 'verified'
+    assert assessment.trusted is True
 
 
 def test_payload_hash_format_guard() -> None:
@@ -95,7 +104,7 @@ def test_location_payload_hash_changes_when_trust_signals_change() -> None:
             device_trust_status='trusted',
             device_trust_summary='Looks healthy',
             device_trust_reasons=[],
-            integrity_status='trusted_placeholder',
+            integrity_status='verified',
             integrity_trusted=True,
             integrity_token_present=True,
             app_debug_build=False,

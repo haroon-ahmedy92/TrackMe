@@ -18,6 +18,12 @@ open class DeviceTrustEvaluator @Inject constructor() {
             if (appSignals.debuggableApp) add("DEBUGGABLE_APP_FLAG")
             if (appSignals.rootSuspicion) add("ROOT_SUSPICION_PLACEHOLDER")
             if (locationSnapshot?.suspiciousMockLocation == true) add("MOCK_LOCATION_HEURISTIC")
+            if (integritySignal.status.equals("suspicious", ignoreCase = true)) {
+                add("INTEGRITY_SUSPICIOUS")
+            }
+            if (!integritySignal.trusted && integritySignal.status.equals("advisory", ignoreCase = true)) {
+                add("INTEGRITY_ADVISORY")
+            }
             if (!integritySignal.trusted && integritySignal.status.equals("untrusted", ignoreCase = true)) {
                 add("INTEGRITY_NOT_TRUSTED")
             }
@@ -31,6 +37,7 @@ open class DeviceTrustEvaluator @Inject constructor() {
                 it == "ROOT_SUSPICION_PLACEHOLDER" ||
                     it == "MOCK_LOCATION_HEURISTIC" ||
                     it == "INTEGRITY_NOT_TRUSTED" ||
+                    it == "INTEGRITY_SUSPICIOUS" ||
                     it == "DEBUGGABLE_APP_FLAG"
             } -> DeviceTrustStatus.CAUTION
 

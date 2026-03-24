@@ -148,6 +148,7 @@ class CaseEvidenceService:
         incident: Incident,
         payload: IncidentAttachmentCreateRequest,
         actor_sub: str,
+        storage_backend: str | None = None,
     ) -> IncidentAttachment:
         attachment = IncidentAttachment(
             org_id=incident.org_id,
@@ -158,11 +159,31 @@ class CaseEvidenceService:
             byte_size=payload.byte_size,
             sha256=payload.sha256,
             description=payload.description,
+            storage_backend=storage_backend,
             storage_key=payload.storage_key or f'placeholder://incident/{incident.id}/{payload.file_name.strip()}',
             created_at=datetime.now(timezone.utc),
         )
         session.add(attachment)
         await session.flush()
+        return attachment
+
+    async def get_attachment(
+        self,
+        session: AsyncSession,
+        *,
+        incident_id: UUID,
+        attachment_id: UUID,
+    ) -> IncidentAttachment:
+        attachment = (
+            await session.execute(
+                select(IncidentAttachment).where(
+                    IncidentAttachment.id == attachment_id,
+                    IncidentAttachment.incident_id == incident_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if attachment is None:
+            raise ValueError('Unknown attachment_id')
         return attachment
 
     async def list_exports(
@@ -232,11 +253,16 @@ class CaseEvidenceService:
         )
         session.add(export)
         await session.flush()
-        bundle = bundle_service.ensure_bundle(export_record=export, chain=chain)
+        bundle = await bundle_service.ensure_bundle(export_record=export, chain=chain)
         export.summary_json = {
             **summary,
-            'bundle_path': str(bundle.bundle_path),
-            'summary_path': str(bundle.summary_path),
+            'bundle_storage_key': bundle.bundle_storage_key,
+            'bundle_storage_backend': bundle.bundle_storage_backend,
+            'bundle_file_name': bundle.bundle_file_name,
+            'bundle_media_type': bundle.bundle_media_type,
+            'bundle_byte_size': bundle.bundle_byte_size,
+            'summary_file_name': bundle.summary_file_name,
+            'manifest_file_name': bundle.manifest_file_name,
         }
         await session.flush()
         return export
@@ -275,11 +301,16 @@ class CaseEvidenceService:
         export.summary_json = summary
         export.generated_at = now
         await session.flush()
-        bundle = bundle_service.ensure_bundle(export_record=export, chain=chain)
+        bundle = await bundle_service.ensure_bundle(export_record=export, chain=chain)
         export.summary_json = {
             **summary,
-            'bundle_path': str(bundle.bundle_path),
-            'summary_path': str(bundle.summary_path),
+            'bundle_storage_key': bundle.bundle_storage_key,
+            'bundle_storage_backend': bundle.bundle_storage_backend,
+            'bundle_file_name': bundle.bundle_file_name,
+            'bundle_media_type': bundle.bundle_media_type,
+            'bundle_byte_size': bundle.bundle_byte_size,
+            'summary_file_name': bundle.summary_file_name,
+            'manifest_file_name': bundle.manifest_file_name,
         }
         await session.flush()
         return export
@@ -544,7 +575,9 @@ class CaseEvidenceService:
                         'byte_size': attachment.byte_size,
                         'sha256': attachment.sha256,
                         'description': attachment.description,
+                        'storage_backend': attachment.storage_backend,
                         'storage_key': attachment.storage_key,
+                        'download_url': f'/api/v1/platform/cases/{attachment.incident_id}/attachments/{attachment.id}/download?org_id={incident.org_id}',
                         'created_at': attachment.created_at.isoformat(),
                     }
                     for attachment in attachments
@@ -559,7 +592,7 @@ class CaseEvidenceService:
                         'reason': export.reason,
                         'redact_fields': list(export.redact_fields_json.get('fields', [])),
                         'summary': deepcopy(export.summary_json),
-                        'download_placeholder': f'placeholder://exports/{export.id}.{export.format.value}',
+                        'download_placeholder': f'/api/v1/platform/cases/{incident.id}/exports/{export.id}/download?org_id={incident.org_id}',
                         'created_at': export.created_at.isoformat(),
                         'generated_at': export.generated_at.isoformat() if export.generated_at else None,
                     }

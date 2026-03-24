@@ -18,6 +18,11 @@ val trackmeApiBaseUrl = providers.gradleProperty("TRACKME_API_BASE_URL")
     .orElse("http://10.0.2.2:8000/api/")
 val trackmeCommandVerificationPublicKeyPem = providers.gradleProperty("TRACKME_COMMAND_VERIFICATION_PUBLIC_KEY_PEM")
     .orElse("")
+val trackmeMapProvider = providers.gradleProperty("TRACKME_MAP_PROVIDER").orElse("google")
+val trackmeGoogleStaticMapsApiKey = providers.gradleProperty("TRACKME_GOOGLE_STATIC_MAPS_API_KEY").orElse("")
+val trackmeMapboxAccessToken = providers.gradleProperty("TRACKME_MAPBOX_ACCESS_TOKEN").orElse("")
+val trackmeMapboxUsername = providers.gradleProperty("TRACKME_MAPBOX_USERNAME").orElse("mapbox")
+val trackmeMapboxStyleId = providers.gradleProperty("TRACKME_MAPBOX_STYLE_ID").orElse("streets-v12")
 
 android {
     namespace = "com.example.trackme"
@@ -36,6 +41,27 @@ android {
             "String",
             "TRACKME_COMMAND_VERIFICATION_PUBLIC_KEY_PEM",
             "\"${escapeBuildConfig(trackmeCommandVerificationPublicKeyPem.get())}\""
+        )
+        buildConfigField("String", "TRACKME_MAP_PROVIDER", "\"${escapeBuildConfig(trackmeMapProvider.get())}\"")
+        buildConfigField(
+            "String",
+            "TRACKME_GOOGLE_STATIC_MAPS_API_KEY",
+            "\"${escapeBuildConfig(trackmeGoogleStaticMapsApiKey.get())}\""
+        )
+        buildConfigField(
+            "String",
+            "TRACKME_MAPBOX_ACCESS_TOKEN",
+            "\"${escapeBuildConfig(trackmeMapboxAccessToken.get())}\""
+        )
+        buildConfigField(
+            "String",
+            "TRACKME_MAPBOX_USERNAME",
+            "\"${escapeBuildConfig(trackmeMapboxUsername.get())}\""
+        )
+        buildConfigField(
+            "String",
+            "TRACKME_MAPBOX_STYLE_ID",
+            "\"${escapeBuildConfig(trackmeMapboxStyleId.get())}\""
         )
     }
 

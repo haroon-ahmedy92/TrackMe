@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hmac
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import NAMESPACE_DNS, UUID, uuid5
 
@@ -11,18 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.security import Role, jwt
 from app.db.models import Organization, User, UserRole
+from app.services.operator_auth_provider import AuthenticatedOperator, OperatorAuthProvider
 
 
-@dataclass(frozen=True)
-class AuthenticatedOperator:
-    user: User
-    email: str
-    full_name: str
-    token: str
-    ui_role: str
-
-
-class LocalAuthService:
+class LocalAuthService(OperatorAuthProvider):
     def is_enabled(self) -> bool:
         return settings.local_auth_enabled
 

@@ -60,6 +60,20 @@ class Settings(BaseModel):
     spatial_default_history_hours: int = 24
     spatial_max_history_hours: int = 168
     exports_storage_dir: str = 'backend/generated_exports'
+    object_storage_backend: str = 'local'
+    object_storage_local_dir: str = 'backend/object_storage'
+    object_storage_s3_bucket: str | None = None
+    object_storage_s3_region: str | None = None
+    object_storage_s3_endpoint: str | None = None
+    object_storage_s3_access_key: str | None = None
+    object_storage_s3_secret_key: str | None = None
+    object_storage_s3_prefix: str = 'trackme'
+    ip_enrichment_provider: str = 'none'
+    ip_enrichment_api_url: str | None = None
+    ip_enrichment_api_key: str | None = None
+    ip_enrichment_cache_ttl_seconds: int = 21600
+    integrity_verification_provider: str = 'none'
+    play_integrity_expected_package: str | None = None
     observability_bulk_lookup_threshold: int = 10
     observability_failed_auth_threshold: int = 5
     observability_failed_command_threshold: int = 5
@@ -169,6 +183,28 @@ settings.spatial_max_history_hours = int(
     os.getenv('SPATIAL_MAX_HISTORY_HOURS', settings.spatial_max_history_hours)
 )
 settings.exports_storage_dir = os.getenv('EXPORTS_STORAGE_DIR', settings.exports_storage_dir)
+settings.object_storage_backend = os.getenv('OBJECT_STORAGE_BACKEND', settings.object_storage_backend).lower()
+settings.object_storage_local_dir = os.getenv('OBJECT_STORAGE_LOCAL_DIR', settings.object_storage_local_dir)
+settings.object_storage_s3_bucket = os.getenv('OBJECT_STORAGE_S3_BUCKET', settings.object_storage_s3_bucket)
+settings.object_storage_s3_region = os.getenv('OBJECT_STORAGE_S3_REGION', settings.object_storage_s3_region)
+settings.object_storage_s3_endpoint = os.getenv('OBJECT_STORAGE_S3_ENDPOINT', settings.object_storage_s3_endpoint)
+settings.object_storage_s3_access_key = os.getenv('OBJECT_STORAGE_S3_ACCESS_KEY', settings.object_storage_s3_access_key)
+settings.object_storage_s3_secret_key = os.getenv('OBJECT_STORAGE_S3_SECRET_KEY', settings.object_storage_s3_secret_key)
+settings.object_storage_s3_prefix = os.getenv('OBJECT_STORAGE_S3_PREFIX', settings.object_storage_s3_prefix)
+settings.ip_enrichment_provider = os.getenv('IP_ENRICHMENT_PROVIDER', settings.ip_enrichment_provider).lower()
+settings.ip_enrichment_api_url = os.getenv('IP_ENRICHMENT_API_URL', settings.ip_enrichment_api_url)
+settings.ip_enrichment_api_key = os.getenv('IP_ENRICHMENT_API_KEY', settings.ip_enrichment_api_key)
+settings.ip_enrichment_cache_ttl_seconds = int(
+    os.getenv('IP_ENRICHMENT_CACHE_TTL_SECONDS', settings.ip_enrichment_cache_ttl_seconds)
+)
+settings.integrity_verification_provider = os.getenv(
+    'INTEGRITY_VERIFICATION_PROVIDER',
+    settings.integrity_verification_provider,
+).lower()
+settings.play_integrity_expected_package = os.getenv(
+    'PLAY_INTEGRITY_EXPECTED_PACKAGE',
+    settings.play_integrity_expected_package,
+)
 settings.observability_bulk_lookup_threshold = int(
     os.getenv('OBSERVABILITY_BULK_LOOKUP_THRESHOLD', settings.observability_bulk_lookup_threshold)
 )

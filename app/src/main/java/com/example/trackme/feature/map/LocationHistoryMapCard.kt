@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -20,21 +21,28 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import android.webkit.WebSettings
+import android.webkit.WebView
 import com.example.trackme.domain.model.LocationPrecision
 import com.example.trackme.domain.model.LocationSnapshot
 import com.example.trackme.feature.common.SectionCard
+import com.example.trackme.ui.map.MapProvider
 import kotlin.math.max
 
 @Composable
 fun LocationHistoryMapCard(
     history: List<LocationSnapshot>,
+    mapProvider: MapProvider,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val renderSpec = mapProvider.render(history)
     SectionCard(
         modifier = modifier,
         title = "Location history playback",
-        eyebrow = "Bounded local view"
+        eyebrow = if (renderSpec.staticMapUrl != null) "Provider-backed view" else "Bounded local view"
     ) {
         if (history.isEmpty()) {
             Box(
@@ -52,6 +60,56 @@ fun LocationHistoryMapCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        } else if (renderSpec.staticMapUrl != null) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                            shape = RoundedCornerShape(20.dp)
+                        )
+                ) {
+                    AndroidView(
+                        modifier = Modifier.fillMaxWidth().height(220.dp),
+                        factory = {
+                            WebView(context).apply {
+                                settings.javaScriptEnabled = false
+                                settings.cacheMode = WebSettings.LOAD_DEFAULT
+                                settings.loadsImagesAutomatically = true
+                                overScrollMode = WebView.OVER_SCROLL_NEVER
+                                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                            }
+                        },
+                        update = { webView ->
+                            val html = """
+                                <html>
+                                  <body style="margin:0;background:transparent;">
+                                    <img src="${renderSpec.staticMapUrl}" alt="TrackMe map" style="width:100%;height:100%;object-fit:cover;border-radius:20px;" />
+                                  </body>
+                                </html>
+                            """.trimIndent()
+                            webView.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
+                        }
+                    )
+                }
+
+                Text(
+                    text = "${renderSpec.providerName} configured. Precise, moderate, approximate, stale, and offline samples keep distinct marker styles.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    MapLegendItem(label = "Precise", color = MaterialTheme.colorScheme.primary)
+                    MapLegendItem(label = "Moderate", color = MaterialTheme.colorScheme.tertiary)
+                    MapLegendItem(label = "Approximate", color = MaterialTheme.colorScheme.outline)
+                }
             }
         } else {
             val projectedPoints = rememberProjectedPoints(history)

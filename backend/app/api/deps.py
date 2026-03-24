@@ -30,6 +30,7 @@ from app.services.notification_event_service import NotificationEventService
 from app.services.notification_service import FcmNotificationService, NotificationService
 from app.services.notification_template_service import NotificationTemplateService
 from app.services.observability_service import ObservabilityService
+from app.services.object_storage_service import ObjectStorageService, build_object_storage_service
 from app.services.ownership_access_service import OwnershipAccessService
 from app.services.remote_action_service import RemoteActionService
 from app.services.rule_action_executor import RuleActionExecutor
@@ -38,6 +39,10 @@ from app.services.spatial_service import SpatialService
 from app.services.signed_telemetry_service import SignedTelemetryService
 from app.services.tenant_service import TenantService
 from app.services.telemetry_service import TelemetryService
+
+_object_storage_service: ObjectStorageService | None = None
+_ip_enrichment_service: IpEnrichmentService | None = None
+_integrity_verification_service: IntegrityVerificationService | None = None
 
 
 def get_audit_service() -> AuditService:
@@ -103,11 +108,24 @@ def get_device_trust_service() -> DeviceTrustService:
 
 
 def get_ip_enrichment_service() -> IpEnrichmentService:
-    return IpEnrichmentService()
+    global _ip_enrichment_service
+    if _ip_enrichment_service is None:
+        _ip_enrichment_service = IpEnrichmentService()
+    return _ip_enrichment_service
 
 
 def get_integrity_verification_service() -> IntegrityVerificationService:
-    return IntegrityVerificationService()
+    global _integrity_verification_service
+    if _integrity_verification_service is None:
+        _integrity_verification_service = IntegrityVerificationService()
+    return _integrity_verification_service
+
+
+def get_object_storage_service() -> ObjectStorageService:
+    global _object_storage_service
+    if _object_storage_service is None:
+        _object_storage_service = build_object_storage_service()
+    return _object_storage_service
 
 
 def get_signed_telemetry_service() -> SignedTelemetryService:
@@ -154,7 +172,7 @@ def get_case_evidence_service() -> CaseEvidenceService:
 
 
 def get_evidence_export_bundle_service() -> EvidenceExportBundleService:
-    return EvidenceExportBundleService()
+    return EvidenceExportBundleService(object_storage_service=get_object_storage_service())
 
 
 def get_remote_action_service() -> RemoteActionService:

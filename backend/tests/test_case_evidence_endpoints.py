@@ -7,13 +7,19 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-from app.api.deps import get_audit_log_service, get_case_evidence_service, get_case_management_service, get_spatial_service
-from app.core.config import settings
+from app.api.deps import (
+    get_audit_log_service,
+    get_case_evidence_service,
+    get_case_management_service,
+    get_object_storage_service,
+    get_spatial_service,
+)
 from app.core.security import Principal, Role, get_current_principal
 from app.db.models import EvidenceExportStatus
 from app.main import app
 from app.services.case_evidence_service import CaseEvidenceService
 from app.services.evidence_export_bundle_service import EvidenceExportBundleService
+from app.services.object_storage_service import LocalObjectStorageService
 
 
 class DummySession:
@@ -138,6 +144,7 @@ class FakeCaseEvidenceService:
         return [
             SimpleNamespace(
                 id=uuid4(),
+                org_id=self.org_id,
                 incident_id=incident_id,
                 uploaded_by_sub='admin@example.com',
                 file_name='handover-form.pdf',
@@ -145,14 +152,16 @@ class FakeCaseEvidenceService:
                 byte_size=1204,
                 sha256='abc123',
                 description='Signed handover form',
+                storage_backend='local',
                 storage_key='placeholder://incident/file',
                 created_at=datetime.now(timezone.utc),
             )
         ]
 
-    async def create_attachment(self, session, *, incident, payload, actor_sub):
+    async def create_attachment(self, session, *, incident, payload, actor_sub, storage_backend=None):
         return SimpleNamespace(
             id=uuid4(),
+            org_id=incident.org_id,
             incident_id=incident.id,
             uploaded_by_sub=actor_sub,
             file_name=payload.file_name,
@@ -160,7 +169,24 @@ class FakeCaseEvidenceService:
             byte_size=payload.byte_size,
             sha256=payload.sha256,
             description=payload.description,
+            storage_backend=storage_backend,
             storage_key=payload.storage_key or 'placeholder://incident/file',
+            created_at=datetime.now(timezone.utc),
+        )
+
+    async def get_attachment(self, session, *, incident_id, attachment_id):
+        return SimpleNamespace(
+            id=attachment_id,
+            incident_id=incident_id,
+            org_id=self.org_id,
+            uploaded_by_sub='admin@example.com',
+            file_name='handover-form.pdf',
+            media_type='application/pdf',
+            byte_size=1204,
+            sha256='abc123',
+            description='Signed handover form',
+            storage_backend='local',
+            storage_key='placeholder://incident/file',
             created_at=datetime.now(timezone.utc),
         )
 
@@ -325,7 +351,9 @@ class FakeCaseEvidenceService:
                     'byte_size': 1024,
                     'sha256': 'abc123',
                     'description': 'Signed handover form',
+                    'storage_backend': 'local',
                     'storage_key': 'placeholder://incident/file',
+                    'download_url': '/api/v1/platform/cases/test/attachments/att-1/download',
                     'created_at': now,
                 }
             ],
@@ -488,11 +516,11 @@ def test_case_export_download_returns_zip_bundle(tmp_path) -> None:
     fake_case_service = FakeCaseManagementService()
     fake_evidence_service = FakeCaseEvidenceService()
     fake_audit = FakeAuditLogService()
-    bundle_service = EvidenceExportBundleService()
+    object_storage_service = LocalObjectStorageService(str(tmp_path))
+    bundle_service = EvidenceExportBundleService(object_storage_service=object_storage_service)
     org_id = str(fake_case_service.org_id)
     from app.db.base import get_db_session
 
-    settings.exports_storage_dir = str(tmp_path)
     export_id = uuid4()
     now = datetime.now(timezone.utc)
     export_record = SimpleNamespace(
@@ -508,17 +536,25 @@ def test_case_export_download_returns_zip_bundle(tmp_path) -> None:
         created_at=now,
         generated_at=now,
     )
-    bundle_service.ensure_bundle(
-        export_record=export_record,
-        chain={
-            'incident': {'incident_id': str(fake_case_service.incident_id), 'ticket_reference': 'CASE-102', 'state': 'suspected_lost'},
-            'actions_taken': [],
-            'notes': [],
-            'attachments': [],
-            'entries': [{'title': 'Location sample', 'summary': 'Approximate area-level signal'}],
-            'exports': [],
-        },
+    bundle = __import__('asyncio').run(
+        bundle_service.ensure_bundle(
+            export_record=export_record,
+            chain={
+                'incident': {'incident_id': str(fake_case_service.incident_id), 'ticket_reference': 'CASE-102', 'state': 'suspected_lost'},
+                'actions_taken': [],
+                'notes': [],
+                'attachments': [],
+                'entries': [{'title': 'Location sample', 'summary': 'Approximate area-level signal'}],
+                'exports': [],
+            },
+        )
     )
+    export_record.summary_json = {
+        'placeholder': False,
+        'bundle_storage_key': bundle.bundle_storage_key,
+        'bundle_storage_backend': bundle.bundle_storage_backend,
+        'bundle_file_name': bundle.bundle_file_name,
+    }
 
     async def _list_exports(session, *, incident_id):
         return [export_record]
@@ -530,6 +566,7 @@ def test_case_export_download_returns_zip_bundle(tmp_path) -> None:
     app.dependency_overrides[get_case_management_service] = lambda: fake_case_service
     app.dependency_overrides[get_case_evidence_service] = lambda: fake_evidence_service
     app.dependency_overrides[get_audit_log_service] = lambda: fake_audit
+    app.dependency_overrides[get_object_storage_service] = lambda: object_storage_service
     try:
         client = TestClient(app)
         response = client.get(
@@ -545,8 +582,7 @@ def test_case_export_download_returns_zip_bundle(tmp_path) -> None:
 
 
 def test_pdf_bundle_generation_writes_pdf_file(tmp_path) -> None:
-    settings.exports_storage_dir = str(tmp_path)
-    bundle_service = EvidenceExportBundleService()
+    bundle_service = EvidenceExportBundleService(object_storage_service=LocalObjectStorageService(str(tmp_path)))
     now = datetime.now(timezone.utc)
     export_record = SimpleNamespace(
         id=uuid4(),
@@ -562,16 +598,18 @@ def test_pdf_bundle_generation_writes_pdf_file(tmp_path) -> None:
         generated_at=now,
     )
 
-    bundle = bundle_service.ensure_bundle(
-        export_record=export_record,
-        chain={
-            'incident': {'incident_id': 'inc-1', 'ticket_reference': 'CASE-500', 'state': 'confirmed_stolen'},
-            'actions_taken': [],
-            'notes': [],
-            'attachments': [],
-            'entries': [{'title': 'Remote lock', 'summary': 'ACKED command'}],
-            'exports': [],
-        },
+    bundle = __import__('asyncio').run(
+        bundle_service.ensure_bundle(
+            export_record=export_record,
+            chain={
+                'incident': {'incident_id': 'inc-1', 'ticket_reference': 'CASE-500', 'state': 'confirmed_stolen'},
+                'actions_taken': [],
+                'notes': [],
+                'attachments': [],
+                'entries': [{'title': 'Remote lock', 'summary': 'ACKED command'}],
+                'exports': [],
+            },
+        )
     )
 
     assert bundle.summary_path.suffix == '.pdf'
@@ -580,8 +618,7 @@ def test_pdf_bundle_generation_writes_pdf_file(tmp_path) -> None:
 
 
 def test_csv_bundle_generation_writes_multiple_csv_files(tmp_path) -> None:
-    settings.exports_storage_dir = str(tmp_path)
-    bundle_service = EvidenceExportBundleService()
+    bundle_service = EvidenceExportBundleService(object_storage_service=LocalObjectStorageService(str(tmp_path)))
     now = datetime.now(timezone.utc)
     export_record = SimpleNamespace(
         id=uuid4(),
@@ -597,34 +634,36 @@ def test_csv_bundle_generation_writes_multiple_csv_files(tmp_path) -> None:
         generated_at=now,
     )
 
-    bundle = bundle_service.ensure_bundle(
-        export_record=export_record,
-        chain={
-            'incident_summary': {
-                'incident_id': 'inc-1',
-                'ticket_reference': 'CASE-500',
-                'state': 'confirmed_stolen',
-                'assigned_operator_sub': 'operator@example.com',
+    bundle = __import__('asyncio').run(
+        bundle_service.ensure_bundle(
+            export_record=export_record,
+            chain={
+                'incident_summary': {
+                    'incident_id': 'inc-1',
+                    'ticket_reference': 'CASE-500',
+                    'state': 'confirmed_stolen',
+                    'assigned_operator_sub': 'operator@example.com',
+                },
+                'incident': {'incident_id': 'inc-1', 'ticket_reference': 'CASE-500', 'state': 'confirmed_stolen'},
+                'location_timeline': [
+                    {
+                        'event_id': 'loc-1',
+                        'precision': 'approximate',
+                        'approximate_label': 'Approximate source only',
+                        'source_label': 'Backend IP geolocation fallback',
+                    }
+                ],
+                'audit_trail': [{'action': 'CASE_EVIDENCE_EXPORT_CREATED', 'actor_sub': 'auditor@example.com'}],
+                'command_history': [{'remote_action_id': 'cmd-1', 'action_kind': 'lock'}],
+                'geofence_events': [{'geofence_event_id': 'geo-1', 'event_type': 'exit'}],
+                'actions_taken': [{'remote_action_id': 'cmd-1', 'action_kind': 'lock'}],
+                'notes': [{'note_id': 'note-1', 'body': 'Analyst note'}],
+                'attachments': [{'attachment_id': 'att-1', 'file_name': 'handover.pdf'}],
+                'external_shares': [{'recipient_label': 'Legal', 'reason': 'Review'}],
+                'entries': [{'title': 'Remote lock', 'summary': 'ACKED command'}],
+                'exports': [],
             },
-            'incident': {'incident_id': 'inc-1', 'ticket_reference': 'CASE-500', 'state': 'confirmed_stolen'},
-            'location_timeline': [
-                {
-                    'event_id': 'loc-1',
-                    'precision': 'approximate',
-                    'approximate_label': 'Approximate source only',
-                    'source_label': 'Backend IP geolocation fallback',
-                }
-            ],
-            'audit_trail': [{'action': 'CASE_EVIDENCE_EXPORT_CREATED', 'actor_sub': 'auditor@example.com'}],
-            'command_history': [{'remote_action_id': 'cmd-1', 'action_kind': 'lock'}],
-            'geofence_events': [{'geofence_event_id': 'geo-1', 'event_type': 'exit'}],
-            'actions_taken': [{'remote_action_id': 'cmd-1', 'action_kind': 'lock'}],
-            'notes': [{'note_id': 'note-1', 'body': 'Analyst note'}],
-            'attachments': [{'attachment_id': 'att-1', 'file_name': 'handover.pdf'}],
-            'external_shares': [{'recipient_label': 'Legal', 'reason': 'Review'}],
-            'entries': [{'title': 'Remote lock', 'summary': 'ACKED command'}],
-            'exports': [],
-        },
+        )
     )
 
     assert bundle.summary_path.name == 'incident-summary.csv'

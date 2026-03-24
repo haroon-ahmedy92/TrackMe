@@ -1,7 +1,9 @@
 'use client';
 
 import { Badge } from '@/components/ui/Badge';
+import { buildStaticMap, freshnessForTimestamp, type MapFreshness } from '@/lib/maps/provider';
 import type { DeviceClusterRecord, GeofenceRecord, LocationHistoryPoint, LocationPrecision } from '@/types/models';
+import Image from 'next/image';
 import { useMemo } from 'react';
 
 type MappablePoint = Pick<
@@ -9,6 +11,12 @@ type MappablePoint = Pick<
   'id' | 'latitude' | 'longitude' | 'precision' | 'confidenceScore' | 'sourceLabel' | 'collectedAt' | 'isApproximate'
 > & {
   label?: string;
+  freshness?: MapFreshness;
+};
+
+type NormalizedPoint = Omit<MappablePoint, 'latitude' | 'longitude'> & {
+  latitude: number;
+  longitude: number;
 };
 
 interface GeoSignalMapProps {
@@ -68,11 +76,11 @@ export function GeoSignalMap({
 }: GeoSignalMapProps) {
   const width = 920;
   const normalizedPoints = useMemo(
-    () => points.filter((point) => point.latitude != null && point.longitude != null),
+    () => points.filter((point): point is NormalizedPoint => point.latitude != null && point.longitude != null),
     [points],
   );
   const normalizedRoute = useMemo(
-    () => routePoints.filter((point) => point.latitude != null && point.longitude != null),
+    () => routePoints.filter((point): point is NormalizedPoint => point.latitude != null && point.longitude != null),
     [routePoints],
   );
 
@@ -131,6 +139,65 @@ export function GeoSignalMap({
       return `${index === 0 ? 'M' : 'L'} ${projected.x} ${projected.y}`;
     })
     .join(' ');
+
+  const renderedMap = buildStaticMap({
+    points: normalizedPoints.map((point) => ({
+      ...point,
+      freshness: point.freshness ?? freshnessForTimestamp(point.collectedAt),
+    })),
+    routePoints: normalizedRoute.map((point) => ({
+      ...point,
+      freshness: point.freshness ?? freshnessForTimestamp(point.collectedAt),
+    })),
+    geofences,
+    clusters,
+    width,
+    height,
+  });
+
+  if (renderedMap.staticMapUrl) {
+    return (
+      <div className="stack" style={{ gap: 10 }}>
+        <div
+          style={{
+            borderRadius: 20,
+            border: '1px solid var(--border)',
+            background: 'var(--surface)',
+            overflow: 'hidden',
+          }}
+        >
+          <Image
+            src={renderedMap.staticMapUrl}
+            alt={title ?? 'Map view'}
+            width={width}
+            height={height}
+            unoptimized
+            style={{ display: 'block', width: '100%', height, objectFit: 'cover', background: 'var(--surface-muted)' }}
+          />
+        </div>
+        <div className="row" style={{ justifyContent: 'space-between' }}>
+          <div className="row">
+            <Badge variant="precise">Precise</Badge>
+            <Badge variant="moderate">Moderate</Badge>
+            <Badge variant="approximate">Approximate</Badge>
+            <Badge variant="stale">Stale</Badge>
+            <Badge variant="offline">Offline</Badge>
+          </div>
+          <div className="row">
+            <Badge variant="neutral">{renderedMap.provider === 'mapbox' ? 'Mapbox' : 'Google Maps'}</Badge>
+            {renderedMap.interactiveUrl ? (
+              <a href={renderedMap.interactiveUrl} target="_blank" rel="noreferrer" className="text-muted" style={{ fontSize: 12 }}>
+                Open interactive map
+              </a>
+            ) : null}
+          </div>
+        </div>
+        <p className="text-muted" style={{ margin: 0, fontSize: 12 }}>
+          Approximate, stale, and offline points stay visually distinct. IP or network-derived context must not be treated as exact live recovery location.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="stack" style={{ gap: 10 }}>
@@ -247,9 +314,11 @@ export function GeoSignalMap({
           <Badge variant="precise">Precise</Badge>
           <Badge variant="moderate">Moderate</Badge>
           <Badge variant="approximate">Approximate</Badge>
+          <Badge variant="stale">Stale</Badge>
+          <Badge variant="offline">Offline</Badge>
         </div>
         <p className="text-muted" style={{ margin: 0, fontSize: 12 }}>
-          Approximate IP or network-derived signals are shown with a visually distinct outline and should not be treated as exact recovery points.
+          Real map providers are used when configured. This local fallback keeps the same precision semantics so approximate IP or network-derived signals are never treated as exact recovery points.
         </p>
       </div>
     </div>

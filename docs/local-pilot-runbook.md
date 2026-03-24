@@ -47,6 +47,10 @@ Important fields in `.env`:
 - `SIGNED_TELEMETRY_MODE=required`
 - `ALLOW_PLACEHOLDER_SIGNED_TELEMETRY=false`
 - `ALLOW_INSECURE_JWT_FOR_DEV=false`
+- `OBJECT_STORAGE_BACKEND`
+- `IP_ENRICHMENT_PROVIDER`
+- `INTEGRITY_VERIFICATION_PROVIDER`
+- `PLAY_INTEGRITY_EXPECTED_PACKAGE`
 
 Recommended local values:
 
@@ -61,6 +65,11 @@ PILOT_BOOTSTRAP_ORG_NAME=TrackMe Pilot Org
 PILOT_BOOTSTRAP_ORG_SLUG=trackme-pilot
 COMMAND_SIGNING_PRIVATE_KEY_PATH=/app/.secrets/command_signing_private.pem
 COMMAND_SIGNING_PUBLIC_KEY_PATH=/app/.secrets/command_signing_public.pem
+OBJECT_STORAGE_BACKEND=local
+OBJECT_STORAGE_LOCAL_DIR=/app/object_storage
+IP_ENRICHMENT_PROVIDER=none
+INTEGRITY_VERIFICATION_PROVIDER=none
+PLAY_INTEGRITY_EXPECTED_PACKAGE=com.example.trackme
 ```
 
 If you run outside Docker, use local filesystem paths instead:
@@ -125,6 +134,9 @@ Use these values in `admin-console/.env.local`:
 ```env
 NEXT_PUBLIC_USE_MOCKS=false
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api/v1
+NEXT_PUBLIC_MAP_PROVIDER=google
+NEXT_PUBLIC_GOOGLE_STATIC_MAPS_API_KEY=
+NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=
 ```
 
 Open:
@@ -144,6 +156,11 @@ Add these to `~/.gradle/gradle.properties` or a project-level `gradle.properties
 ```properties
 TRACKME_API_BASE_URL=http://10.0.2.2:8000/api/
 TRACKME_COMMAND_VERIFICATION_PUBLIC_KEY_PEM=-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----
+TRACKME_MAP_PROVIDER=google
+TRACKME_GOOGLE_STATIC_MAPS_API_KEY=
+TRACKME_MAPBOX_ACCESS_TOKEN=
+TRACKME_MAPBOX_USERNAME=mapbox
+TRACKME_MAPBOX_STYLE_ID=streets-v12
 ```
 
 Important:
@@ -228,7 +245,67 @@ For live device push:
 2. ensure Android receives and registers a valid FCM token
 3. keep the worker and API running
 
-## 8. Validation commands
+## 8. Maps, storage, IP enrichment, and integrity providers
+
+TrackMe now supports pluggable provider configuration for these pilot-hardening paths.
+
+### Maps
+
+- Admin console:
+  - `NEXT_PUBLIC_MAP_PROVIDER=google` or `mapbox`
+  - `NEXT_PUBLIC_GOOGLE_STATIC_MAPS_API_KEY`
+  - `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN`
+  - `NEXT_PUBLIC_MAPBOX_USERNAME`
+  - `NEXT_PUBLIC_MAPBOX_STYLE_ID`
+- Android:
+  - `TRACKME_MAP_PROVIDER=google` or `mapbox`
+  - `TRACKME_GOOGLE_STATIC_MAPS_API_KEY`
+  - `TRACKME_MAPBOX_ACCESS_TOKEN`
+  - `TRACKME_MAPBOX_USERNAME`
+  - `TRACKME_MAPBOX_STYLE_ID`
+
+Current implementation note:
+
+- the pilot now uses real provider-backed static map rendering
+- if credentials are missing, both Android and web fall back to their local placeholder renderer
+- approximate, stale, and offline states remain visually distinct
+
+### Evidence storage
+
+- `OBJECT_STORAGE_BACKEND=local` for local pilots
+- `OBJECT_STORAGE_BACKEND=s3` for S3-compatible storage
+- When using S3-compatible storage, configure:
+  - `OBJECT_STORAGE_S3_BUCKET`
+  - `OBJECT_STORAGE_S3_REGION`
+  - `OBJECT_STORAGE_S3_ENDPOINT`
+  - `OBJECT_STORAGE_S3_ACCESS_KEY`
+  - `OBJECT_STORAGE_S3_SECRET_KEY`
+  - `OBJECT_STORAGE_S3_PREFIX`
+
+### IP enrichment
+
+- `IP_ENRICHMENT_PROVIDER=none`, `ipinfo`, or `ipapi`
+- `IP_ENRICHMENT_API_URL`
+- `IP_ENRICHMENT_API_KEY`
+- `IP_ENRICHMENT_CACHE_TTL_SECONDS`
+
+Important:
+
+- IP-derived location remains approximate only
+- if the provider is unavailable or rate-limited, the backend falls back gracefully without claiming a live coordinate
+
+### Integrity
+
+- `INTEGRITY_VERIFICATION_PROVIDER=none` or `play_integrity`
+- `PLAY_INTEGRITY_EXPECTED_PACKAGE=com.example.trackme`
+
+Current implementation note:
+
+- the backend now understands verified/advisory/unavailable/suspicious integrity outcomes
+- Android exposes honest advisory integrity-provider state
+- full production Play Integrity verification still requires upstream verifier wiring and credentials
+
+## 9. Validation commands
 
 Run these from the repo root:
 
@@ -242,8 +319,7 @@ cd admin-console && npm run typecheck && npm run build
 
 ## Current known pilot gaps
 
-- map providers are still placeholder visual layers, not Google Maps/Mapbox integrations
-- integrity verification is still advisory/placeholder beyond signing and key checks
-- IP enrichment is still not backed by a real provider
-- attachment storage still needs a stronger durable abstraction for long-running evidence handling
+- Android and web currently use real provider-backed static maps, not full interactive SDK map clients
+- integrity verification is still advisory unless a real Play Integrity verifier is wired in
+- live IP enrichment and map rendering still depend on real provider credentials
 - operator-facing notification inbox/history is still thinner than the backend event model
