@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass, field
 
 import httpx
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -21,15 +24,15 @@ class NotificationService:
         raise NotImplementedError
 
 
-class NoopNotificationService(NotificationService):
-    async def send(self, message: NotificationMessage) -> str:
-        return f'noop-{uuid.uuid4()}'
+class NotificationDeliveryError(RuntimeError):
+    pass
 
 
 class FcmNotificationService(NotificationService):
     async def send(self, message: NotificationMessage) -> str:
         if not settings.fcm_server_key:
-            return await NoopNotificationService().send(message)
+            logger.error('FCM delivery requested without FCM_SERVER_KEY configured')
+            raise NotificationDeliveryError('FCM_SERVER_KEY is not configured. Push delivery cannot proceed.')
 
         headers = {
             'Authorization': f'key={settings.fcm_server_key}',
@@ -46,6 +49,10 @@ class FcmNotificationService(NotificationService):
         }
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(settings.fcm_endpoint, headers=headers, json=payload)
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except httpx.HTTPError as exc:
+                logger.exception('FCM push delivery failed')
+                raise NotificationDeliveryError(f'FCM delivery failed: {exc}') from exc
             body = response.json()
         return body.get('message_id') or body.get('name') or f'fcm-{uuid.uuid4()}'

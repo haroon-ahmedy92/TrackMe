@@ -37,31 +37,35 @@ fun DeviceEnrollmentScreen(
     when (val state = uiState) {
         AsyncUiState.Loading -> TrackMeScreen(
             title = stringResource(id = R.string.enrollment_title),
-            subtitle = "Preparing organization-owned or authorized enrollment."
+            subtitle = stringResource(id = R.string.enrollment_preparing_subtitle)
         ) {
-            EmptyStateCard(title = "Loading", body = stringResource(id = R.string.loading))
+            EmptyStateCard(
+                title = stringResource(id = R.string.onboarding_loading_title),
+                body = stringResource(id = R.string.loading)
+            )
         }
 
         is AsyncUiState.Error -> TrackMeScreen(
             title = stringResource(id = R.string.enrollment_title),
-            subtitle = "Preparing organization-owned or authorized enrollment."
+            subtitle = stringResource(id = R.string.enrollment_preparing_subtitle)
         ) {
-            EmptyStateCard(title = "Enrollment unavailable", body = state.message)
+            EmptyStateCard(
+                title = stringResource(id = R.string.enrollment_unavailable_title),
+                body = state.message
+            )
         }
 
         is AsyncUiState.Data -> {
             val form = state.value
             TrackMeScreen(
                 title = stringResource(id = R.string.enrollment_title),
-                subtitle = "Visible pairing for owner-enrolled or organization-managed devices only."
+                subtitle = stringResource(id = R.string.enrollment_visible_subtitle)
             ) {
-                InfoCallout(
-                    text = "This app stays visible on the phone. Locate access is enforced on the backend, limited to authorized owner/admin roles, and every lookup is audited."
-                )
+                InfoCallout(text = stringResource(id = R.string.enrollment_visibility_callout))
 
                 SectionCard(
-                    title = "What this enrollment means",
-                    eyebrow = "Disclosure"
+                    title = stringResource(id = R.string.enrollment_meaning_title),
+                    eyebrow = stringResource(id = R.string.disclosure_label)
                 ) {
                     viewModel.disclosure.bulletPoints.forEach { bullet ->
                         Text(
@@ -72,11 +76,11 @@ fun DeviceEnrollmentScreen(
                 }
 
                 SectionCard(
-                    title = "Ownership and authorization",
-                    eyebrow = "Required"
+                    title = stringResource(id = R.string.ownership_authorization_title),
+                    eyebrow = stringResource(id = R.string.required_label)
                 ) {
                     Text(
-                        text = "Ownership model",
+                        text = stringResource(id = R.string.ownership_model_label),
                         style = MaterialTheme.typography.labelLarge
                     )
                     ChipRow(
@@ -84,20 +88,20 @@ fun DeviceEnrollmentScreen(
                             FilterChip(
                                 selected = form.ownershipType == OwnershipType.SINGLE_USER,
                                 onClick = { viewModel.onOwnershipTypeChanged(OwnershipType.SINGLE_USER) },
-                                label = { Text("Single-user owned") }
+                                label = { Text(stringResource(id = R.string.ownership_single_user)) }
                             )
                         },
                         {
                             FilterChip(
                                 selected = form.ownershipType == OwnershipType.ORGANIZATION_OWNED,
                                 onClick = { viewModel.onOwnershipTypeChanged(OwnershipType.ORGANIZATION_OWNED) },
-                                label = { Text("Organization-owned") }
+                                label = { Text(stringResource(id = R.string.ownership_organization_owned)) }
                             )
                         }
                     )
 
                     Text(
-                        text = "Enrollment authorized by",
+                        text = stringResource(id = R.string.authorized_by_label),
                         style = MaterialTheme.typography.labelLarge
                     )
                     ChipRow(
@@ -105,33 +109,31 @@ fun DeviceEnrollmentScreen(
                             FilterChip(
                                 selected = form.authorizationRole == EnrollmentAuthorizationRole.OWNER,
                                 onClick = { viewModel.onAuthorizationRoleChanged(EnrollmentAuthorizationRole.OWNER) },
-                                label = { Text("Owner") }
+                                label = { Text(stringResource(id = R.string.role_owner)) }
                             )
                         },
                         {
                             FilterChip(
                                 selected = form.authorizationRole == EnrollmentAuthorizationRole.ADMIN,
                                 onClick = { viewModel.onAuthorizationRoleChanged(EnrollmentAuthorizationRole.ADMIN) },
-                                label = { Text("Admin") }
+                                label = { Text(stringResource(id = R.string.role_admin)) }
                             )
                         },
                         {
                             FilterChip(
                                 selected = form.authorizationRole == EnrollmentAuthorizationRole.SECURITY_OPERATOR,
                                 onClick = { viewModel.onAuthorizationRoleChanged(EnrollmentAuthorizationRole.SECURITY_OPERATOR) },
-                                label = { Text("Security operator") }
+                                label = { Text(stringResource(id = R.string.role_security_operator)) }
                             )
                         }
                     )
 
-                    InfoCallout(
-                        text = "Security operators can help with provisioning and case review, but server-side RBAC still blocks them from locating devices unless a policy-admin role authorizes that workflow."
-                    )
+                    InfoCallout(text = stringResource(id = R.string.security_operator_guidance))
                 }
 
                 SectionCard(
-                    title = "Device and pairing",
-                    eyebrow = "Registration"
+                    title = stringResource(id = R.string.device_pairing_title),
+                    eyebrow = stringResource(id = R.string.registration_label)
                 ) {
                     OutlinedTextField(
                         value = form.organizationName,
@@ -144,8 +146,8 @@ fun DeviceEnrollmentScreen(
                     OutlinedTextField(
                         value = form.deviceAlias,
                         onValueChange = viewModel::onDeviceAliasChanged,
-                        label = { Text("Device alias") },
-                        supportingText = { Text("Shown in inventory, audit logs, and incident screens.") },
+                        label = { Text(stringResource(id = R.string.device_alias_label)) },
+                        supportingText = { Text(stringResource(id = R.string.device_alias_supporting)) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
@@ -154,15 +156,15 @@ fun DeviceEnrollmentScreen(
                         OutlinedTextField(
                             value = form.ownerSubject,
                             onValueChange = viewModel::onOwnerSubjectChanged,
-                            label = { Text("Owner subject") },
-                            supportingText = { Text("Usually the owner account ID or email used by your organization.") },
+                            label = { Text(stringResource(id = R.string.owner_subject_label)) },
+                            supportingText = { Text(stringResource(id = R.string.owner_subject_supporting)) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true
                         )
                     }
 
                     Text(
-                        text = "Pairing method",
+                        text = stringResource(id = R.string.pairing_method_label),
                         style = MaterialTheme.typography.labelLarge
                     )
                     ChipRow(
@@ -170,14 +172,14 @@ fun DeviceEnrollmentScreen(
                             FilterChip(
                                 selected = form.pairingMethod == PairingMethod.ENROLLMENT_TOKEN,
                                 onClick = { viewModel.onPairingMethodChanged(PairingMethod.ENROLLMENT_TOKEN) },
-                                label = { Text("Enrollment token") }
+                                label = { Text(stringResource(id = R.string.pairing_method_token)) }
                             )
                         },
                         {
                             FilterChip(
                                 selected = form.pairingMethod == PairingMethod.QR_CODE_URI,
                                 onClick = { viewModel.onPairingMethodChanged(PairingMethod.QR_CODE_URI) },
-                                label = { Text("QR/link paste") }
+                                label = { Text(stringResource(id = R.string.pairing_method_qr_uri)) }
                             )
                         }
                     )
@@ -188,23 +190,21 @@ fun DeviceEnrollmentScreen(
                         label = {
                             Text(
                                 if (form.pairingMethod == PairingMethod.ENROLLMENT_TOKEN) {
-                                    "Enrollment token"
+                                    stringResource(id = R.string.pairing_credential_token_label)
                                 } else {
-                                    "QR pairing URI"
+                                    stringResource(id = R.string.pairing_credential_uri_label)
                                 }
                             )
                         },
-                        supportingText = {
-                            Text("Paste the token or the full trackme://pair link generated by the admin console.")
-                        },
+                        supportingText = { Text(stringResource(id = R.string.pairing_credential_supporting)) },
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 2
                     )
                 }
 
                 SectionCard(
-                    title = "Consent confirmation",
-                    eyebrow = "Required"
+                    title = stringResource(id = R.string.consent_confirmation_title),
+                    eyebrow = stringResource(id = R.string.required_label)
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(
@@ -213,7 +213,7 @@ fun DeviceEnrollmentScreen(
                             label = { Text(stringResource(id = R.string.authorization_checkbox)) }
                         )
                         Text(
-                            text = "Enrollment creates a visible managed state on the device, stores an immutable audit record, and allows future locate requests only through backend policy checks.",
+                            text = stringResource(id = R.string.enrollment_consent_body),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

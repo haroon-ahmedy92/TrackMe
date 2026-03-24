@@ -228,8 +228,6 @@ private class FakeTelemetryRecoveryApi(
         )
     }
 
-    override suspend fun submitAuditEvent(request: com.example.trackme.data.network.AuditEventRequest) = Unit
-
     override suspend fun completePairing(request: PairingCompleteRequestDto): OwnershipBindingResponseDto {
         error("Not needed in this test")
     }

@@ -1,5 +1,6 @@
 package com.example.trackme.di
 
+import com.example.trackme.BuildConfig
 import com.example.trackme.data.network.RecoveryApi
 import com.example.trackme.data.network.TelemetryCompressionInterceptor
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
@@ -35,7 +36,7 @@ object NetworkModule {
     @Singleton
     fun provideRetrofit(okHttpClient: OkHttpClient, json: Json): Retrofit {
         return Retrofit.Builder()
-            .baseUrl(DEFAULT_BASE_URL)
+            .baseUrl(BuildConfig.TRACKME_API_BASE_URL)
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
@@ -44,6 +45,4 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideRecoveryApi(retrofit: Retrofit): RecoveryApi = retrofit.create(RecoveryApi::class.java)
-
-    private const val DEFAULT_BASE_URL = "https://example.org/"
 }

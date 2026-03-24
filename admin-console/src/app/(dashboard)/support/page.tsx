@@ -12,10 +12,13 @@ import { apiClient } from '@/lib/api/client';
 import { authStorage } from '@/lib/auth/storage';
 import { formatDateTime } from '@/lib/format';
 import { useAsyncData } from '@/lib/hooks/useAsyncData';
+import { getCopy } from '@/lib/i18n/copy';
+import type { EnrollmentType, OwnershipType, PairingTokenRecord } from '@/types/models';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 export default function SupportPage() {
+  const ui = getCopy(typeof navigator === 'undefined' ? 'en' : navigator.language);
   const [tenantId, setTenantId] = useState(authStorage.getProfile()?.tenantId ?? 'org-001');
   const [stateFilter, setStateFilter] = useState<'ALL' | 'SUSPECTED_LOST' | 'CONFIRMED_STOLEN' | 'RECOVERED'>('ALL');
   const [updatedFrom, setUpdatedFrom] = useState('');
@@ -27,6 +30,16 @@ export default function SupportPage() {
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
   const [assignLoading, setAssignLoading] = useState(false);
+  const [enrollmentType, setEnrollmentType] = useState<EnrollmentType>('org_managed');
+  const [ownershipType, setOwnershipType] = useState<OwnershipType>('organization_owned');
+  const [selectedDeviceId, setSelectedDeviceId] = useState('');
+  const [ownerSubject, setOwnerSubject] = useState('');
+  const [consentVersion, setConsentVersion] = useState(new Date().toISOString().slice(0, 10));
+  const [expiresInMinutes, setExpiresInMinutes] = useState('30');
+  const [issuedPairing, setIssuedPairing] = useState<PairingTokenRecord | null>(null);
+  const [enrollmentLoading, setEnrollmentLoading] = useState(false);
+  const [enrollmentError, setEnrollmentError] = useState<string | null>(null);
+  const [copiedField, setCopiedField] = useState<'token' | 'link' | null>(null);
 
   const incidentsState = useAsyncData(
     () =>
@@ -40,8 +53,12 @@ export default function SupportPage() {
       }),
     [tenantId, stateFilter, updatedFrom, updatedTo, assignedOperatorFilter, search],
   );
+  const notificationsState = useAsyncData(() => apiClient.getNotifications(10), [tenantId]);
 
   const incidents = incidentsState.data ?? [];
+  const devicesState = useAsyncData(() => apiClient.getDevices(), []);
+  const devices = devicesState.data ?? [];
+  const notifications = notificationsState.data ?? [];
   const selectedIncident = useMemo(
     () => incidents.find((incident) => incident.id === selectedIncidentId) ?? incidents[0] ?? null,
     [incidents, selectedIncidentId],
@@ -82,7 +99,37 @@ export default function SupportPage() {
     }
   };
 
-  if (incidentsState.loading) {
+  const copyValue = async (field: 'token' | 'link', value: string) => {
+    await navigator.clipboard.writeText(value);
+    setCopiedField(field);
+    window.setTimeout(() => setCopiedField((current) => (current === field ? null : current)), 1800);
+  };
+
+  const issuePairingToken = async () => {
+    setEnrollmentLoading(true);
+    setEnrollmentError(null);
+    try {
+      if (ownershipType === 'single_user' && !ownerSubject.trim()) {
+        throw new Error(ui.support.ownerSubjectHint);
+      }
+      const result = await apiClient.issuePairingToken({
+        orgId: tenantId,
+        deviceId: selectedDeviceId || undefined,
+        ownerSubject: ownerSubject.trim() || undefined,
+        enrollmentType,
+        ownershipType,
+        consentVersion,
+        expiresInMinutes: Number(expiresInMinutes) || 30,
+      });
+      setIssuedPairing(result);
+    } catch (errorValue) {
+      setEnrollmentError(errorValue instanceof Error ? errorValue.message : 'Could not issue enrollment token');
+    } finally {
+      setEnrollmentLoading(false);
+    }
+  };
+
+  if (incidentsState.loading || devicesState.loading || notificationsState.loading) {
     return (
       <div className="page">
         <LoadingCard />
@@ -90,11 +137,13 @@ export default function SupportPage() {
     );
   }
 
-  if (incidentsState.error) {
+  if (incidentsState.error || devicesState.error || notificationsState.error) {
     return (
       <div className="page">
         <Card>
-          <p style={{ margin: 0, color: 'var(--danger)' }}>{incidentsState.error}</p>
+          <p style={{ margin: 0, color: 'var(--danger)' }}>
+            {incidentsState.error ?? devicesState.error ?? notificationsState.error}
+          </p>
         </Card>
       </div>
     );
@@ -103,54 +152,140 @@ export default function SupportPage() {
   return (
     <div className="page container stack">
       <div>
-        <h1 className="page-title">Operator Support Dashboard</h1>
-        <p className="page-subtitle">
-          Filter case queues, assign operators, and review export-ready incidents without mixing mutable notes into immutable audit evidence.
-        </p>
+        <h1 className="page-title">{ui.support.title}</h1>
+        <p className="page-subtitle">{ui.support.subtitle}</p>
       </div>
 
       <div className="grid-4">
         <Card>
-          <p className="text-muted" style={{ margin: 0 }}>Total cases</p>
+          <p className="text-muted" style={{ margin: 0 }}>{ui.support.totalCases}</p>
           <h2 style={{ margin: '8px 0 0' }}>{counts.total}</h2>
         </Card>
         <Card>
-          <p className="text-muted" style={{ margin: 0 }}>Suspected lost</p>
+          <p className="text-muted" style={{ margin: 0 }}>{ui.support.suspectedLost}</p>
           <h2 style={{ margin: '8px 0 0' }}>{counts.suspected}</h2>
         </Card>
         <Card>
-          <p className="text-muted" style={{ margin: 0 }}>Confirmed stolen</p>
+          <p className="text-muted" style={{ margin: 0 }}>{ui.support.stolenCases}</p>
           <h2 style={{ margin: '8px 0 0' }}>{counts.stolen}</h2>
         </Card>
         <Card>
-          <p className="text-muted" style={{ margin: 0 }}>Unassigned</p>
+          <p className="text-muted" style={{ margin: 0 }}>{ui.support.unassignedCases}</p>
           <h2 style={{ margin: '8px 0 0' }}>{counts.unassigned}</h2>
         </Card>
       </div>
 
       <Card>
-        <h2 style={{ marginTop: 0 }}>Filters</h2>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: 20, flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 360px' }}>
+            <h2 style={{ marginTop: 0 }}>{ui.support.enrollmentTitle}</h2>
+            <p className="page-subtitle">{ui.support.enrollmentSubtitle}</p>
+            <div className="grid-2" style={{ marginTop: 16 }}>
+              <Select
+                label={ui.support.enrollmentType}
+                value={enrollmentType}
+                onChange={(event) => setEnrollmentType(event.target.value as EnrollmentType)}
+                options={[
+                  { label: 'Organization-managed', value: 'org_managed' },
+                  { label: 'Owner-enrolled', value: 'owner_enrolled' },
+                ]}
+              />
+              <Select
+                label={ui.support.ownershipType}
+                value={ownershipType}
+                onChange={(event) => setOwnershipType(event.target.value as OwnershipType)}
+                options={[
+                  { label: 'Organization-owned', value: 'organization_owned' },
+                  { label: 'Single-user owner', value: 'single_user' },
+                ]}
+              />
+              <Select
+                label={ui.support.existingDevice}
+                value={selectedDeviceId}
+                onChange={(event) => setSelectedDeviceId(event.target.value)}
+                options={[
+                  { label: ui.support.newDevice, value: '' },
+                  ...devices.map((device) => ({
+                    label: `${device.deviceName} (${device.model})`,
+                    value: device.id,
+                  })),
+                ]}
+              />
+              <Input
+                label={ui.support.ownerSubject}
+                value={ownerSubject}
+                onChange={(event) => setOwnerSubject(event.target.value)}
+                placeholder="owner@example.com"
+              />
+              <Input label={ui.support.consentVersion} value={consentVersion} onChange={(event) => setConsentVersion(event.target.value)} />
+              <Input
+                label={ui.support.expiresInMinutes}
+                value={expiresInMinutes}
+                onChange={(event) => setExpiresInMinutes(event.target.value)}
+                inputMode="numeric"
+              />
+            </div>
+
+            {enrollmentError ? <p style={{ color: 'var(--danger)', marginTop: 12 }}>{enrollmentError}</p> : null}
+
+            <Button onClick={() => void issuePairingToken()} loading={enrollmentLoading} style={{ marginTop: 16 }}>
+              {ui.support.issueEnrollment}
+            </Button>
+          </div>
+
+          <div style={{ flex: '1 1 340px' }}>
+            <div style={{ border: '1px solid var(--border)', borderRadius: 18, padding: 18, background: 'var(--surface-muted)' }}>
+              <h3 style={{ marginTop: 0, marginBottom: 8 }}>{ui.support.pairingReady}</h3>
+              <p className="text-muted" style={{ marginTop: 0 }}>{ui.support.pairingHelp}</p>
+              {issuedPairing ? (
+                <div className="stack" style={{ gap: 14 }}>
+                  <div>
+                    <p className="text-muted" style={{ marginBottom: 6 }}>{ui.support.pairingToken}</p>
+                    <code style={{ display: 'block', wordBreak: 'break-all', fontSize: 13 }}>{issuedPairing.token}</code>
+                    <Button variant="ghost" onClick={() => void copyValue('token', issuedPairing.token)} style={{ marginTop: 8 }}>
+                      {copiedField === 'token' ? ui.support.copied : ui.support.copyToken}
+                    </Button>
+                  </div>
+                  <div>
+                    <p className="text-muted" style={{ marginBottom: 6 }}>{ui.support.pairingLink}</p>
+                    <code style={{ display: 'block', wordBreak: 'break-all', fontSize: 13 }}>{issuedPairing.pairingUri}</code>
+                    <Button variant="ghost" onClick={() => void copyValue('link', issuedPairing.pairingUri)} style={{ marginTop: 8 }}>
+                      {copiedField === 'link' ? ui.support.copied : ui.support.copyLink}
+                    </Button>
+                  </div>
+                  <p className="text-muted" style={{ margin: 0 }}>
+                    {ui.support.expiresAt}: {formatDateTime(issuedPairing.expiresAt)}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-muted" style={{ marginBottom: 0 }}>
+                  Issue a token here, then paste it into the Android enrollment screen or hand the pairing link to the operator managing setup.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <h2 style={{ marginTop: 0 }}>{ui.support.filtersTitle}</h2>
         <div className="grid-2">
-          <Input label="Tenant" value={tenantId} onChange={(event) => setTenantId(event.target.value)} />
+          <Input label={ui.support.tenant} value={tenantId} onChange={(event) => setTenantId(event.target.value)} />
           <Select
-            label="Case state"
+            label={ui.support.caseState}
             value={stateFilter}
             onChange={(event) => setStateFilter(event.target.value as typeof stateFilter)}
             options={[
-              { label: 'All states', value: 'ALL' },
-              { label: 'Suspected lost', value: 'SUSPECTED_LOST' },
-              { label: 'Confirmed stolen', value: 'CONFIRMED_STOLEN' },
-              { label: 'Recovered', value: 'RECOVERED' },
+              { label: ui.support.allStates, value: 'ALL' },
+              { label: ui.support.suspectedLost, value: 'SUSPECTED_LOST' },
+              { label: ui.support.confirmedStolen, value: 'CONFIRMED_STOLEN' },
+              { label: ui.support.recovered, value: 'RECOVERED' },
             ]}
           />
-          <Input label="Updated from (ISO)" value={updatedFrom} onChange={(event) => setUpdatedFrom(event.target.value)} />
-          <Input label="Updated to (ISO)" value={updatedTo} onChange={(event) => setUpdatedTo(event.target.value)} />
-          <Input
-            label="Assigned operator"
-            value={assignedOperatorFilter}
-            onChange={(event) => setAssignedOperatorFilter(event.target.value)}
-          />
-          <Input label="Search" value={search} onChange={(event) => setSearch(event.target.value)} />
+          <Input label={ui.support.updatedFrom} value={updatedFrom} onChange={(event) => setUpdatedFrom(event.target.value)} />
+          <Input label={ui.support.updatedTo} value={updatedTo} onChange={(event) => setUpdatedTo(event.target.value)} />
+          <Input label={ui.support.assignedOperator} value={assignedOperatorFilter} onChange={(event) => setAssignedOperatorFilter(event.target.value)} />
+          <Input label={ui.support.search} value={search} onChange={(event) => setSearch(event.target.value)} />
         </div>
       </Card>
 
@@ -161,12 +296,13 @@ export default function SupportPage() {
           columns={[
             {
               key: 'case',
-              header: 'Case',
+              header: ui.support.caseLabel,
               cell: (incident) => (
                 <button
                   type="button"
                   onClick={() => setSelectedIncidentId(incident.id)}
                   style={{ border: 0, background: 'transparent', padding: 0, textAlign: 'left', color: 'var(--text)', cursor: 'pointer' }}
+                  aria-label={`${ui.support.caseLabel}: ${incident.title}`}
                 >
                   <strong>{incident.title}</strong>
                   <span className="text-muted" style={{ display: 'block', fontSize: 12 }}>
@@ -175,36 +311,68 @@ export default function SupportPage() {
                 </button>
               ),
             },
-            { key: 'tenant', header: 'Tenant', cell: (incident) => incident.orgId },
+            { key: 'tenant', header: ui.support.tenant, cell: (incident) => incident.orgId },
             {
               key: 'state',
-              header: 'State',
+              header: ui.support.stateLabel,
               cell: (incident) => (
                 <Badge variant={incident.state === 'CONFIRMED_STOLEN' ? 'danger' : 'warning'}>{incident.state}</Badge>
               ),
             },
             {
               key: 'operator',
-              header: 'Assigned Operator',
-              cell: (incident) => incident.assignedOperator ?? 'Unassigned',
+              header: ui.support.operatorLabel,
+              cell: (incident) => incident.assignedOperator ?? ui.support.unassigned,
             },
-            { key: 'updated', header: 'Updated', cell: (incident) => formatDateTime(incident.updatedAt) },
+            { key: 'updated', header: ui.support.updatedLabel, cell: (incident) => formatDateTime(incident.updatedAt) },
           ]}
-          emptyMessage="No cases matched the current filters."
+          emptyMessage={ui.support.noCases}
         />
+      </Card>
+
+      <Card>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h2 style={{ marginTop: 0, marginBottom: 8 }}>Recent notifications and escalation alerts</h2>
+            <p className="page-subtitle">
+              Incident escalations and device push attempts now show up here with an explicit sent or failed result.
+            </p>
+          </div>
+          <Badge variant="neutral">{notifications.length} recent events</Badge>
+        </div>
+        <div className="stack" style={{ marginTop: 12 }}>
+          {notifications.length === 0 ? <p className="text-muted">No recent notifications for this tenant yet.</p> : null}
+          {notifications.map((event) => (
+            <div key={event.id} style={{ borderLeft: '2px solid var(--border)', paddingLeft: 12 }}>
+              <div className="row" style={{ justifyContent: 'space-between' }}>
+                <p style={{ margin: 0, fontWeight: 700 }}>{String(event.payload.title ?? event.template)}</p>
+                <Badge variant={event.status === 'FAILED' ? 'danger' : 'success'}>{event.status}</Badge>
+              </div>
+              <p className="text-muted" style={{ margin: '4px 0 0', fontSize: 12 }}>
+                {formatDateTime(event.createdAt)} • {event.channel}
+                {event.incidentId ? ` • incident ${event.incidentId}` : ''}
+              </p>
+              <p style={{ margin: '6px 0 0' }}>{String(event.payload.body ?? 'Notification event')}</p>
+              {event.errorMessage ? (
+                <p style={{ margin: '6px 0 0', color: 'var(--danger)', fontSize: 13 }}>{event.errorMessage}</p>
+              ) : null}
+            </div>
+          ))}
+        </div>
       </Card>
 
       {selectedIncident ? (
         <Card>
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <h2 style={{ marginTop: 0, marginBottom: 8 }}>Selected Support Case</h2>
+              <h2 style={{ marginTop: 0, marginBottom: 8 }}>{ui.support.selectedCase}</h2>
               <p className="text-muted" style={{ margin: 0 }}>
                 {selectedIncident.title} • {selectedIncident.state}
               </p>
               <p className="text-muted" style={{ marginTop: 8 }}>
-                Current operator: <strong>{selectedIncident.assignedOperator ?? 'Unassigned'}</strong>
+                {ui.support.operatorLabel}: <strong>{selectedIncident.assignedOperator ?? ui.support.unassigned}</strong>
               </p>
+              <p className="text-muted" style={{ marginTop: 8, marginBottom: 0 }}>{ui.support.selectedCaseHint}</p>
             </div>
             <Link href="/incidents" style={{ color: 'var(--primary)', fontWeight: 600 }}>
               Open detailed case view
@@ -214,13 +382,9 @@ export default function SupportPage() {
           {assignError ? <p style={{ color: 'var(--danger)' }}>{assignError}</p> : null}
 
           <div className="row" style={{ marginTop: 12 }}>
-            <Input
-              label="Assign operator subject"
-              value={assignmentCandidate}
-              onChange={(event) => setAssignmentCandidate(event.target.value)}
-            />
+            <Input label={ui.support.assignField} value={assignmentCandidate} onChange={(event) => setAssignmentCandidate(event.target.value)} />
             <Button style={{ marginTop: 23 }} onClick={() => setAssignModalOpen(true)} disabled={!assignmentCandidate.trim()}>
-              Assign Case
+              {ui.support.assignButton}
             </Button>
           </div>
         </Card>
@@ -228,9 +392,9 @@ export default function SupportPage() {
 
       <SensitiveActionModal
         open={assignModalOpen}
-        title="Assign Case Operator"
-        description="Assignment changes are audited so support teams can review who took ownership of the case."
-        confirmLabel="Assign Operator"
+        title={ui.support.assignTitle}
+        description={ui.support.assignDescription}
+        confirmLabel={ui.support.assignConfirm}
         loading={assignLoading}
         onCancel={() => setAssignModalOpen(false)}
         onConfirm={assignOperator}

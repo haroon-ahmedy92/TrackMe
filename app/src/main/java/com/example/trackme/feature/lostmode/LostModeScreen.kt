@@ -30,59 +30,72 @@ fun LostModeScreen(
 
     TrackMeScreen(
         title = stringResource(id = R.string.lost_mode_title),
-        subtitle = "A visible high-frequency mode for active recovery only."
+        subtitle = stringResource(id = R.string.lost_mode_subtitle)
     ) {
         ManagedStateBanner()
         InfoCallout(text = stringResource(id = R.string.lost_mode_description))
 
         when (val state = uiState) {
             AsyncUiState.Loading -> EmptyStateCard(
-                title = "Loading lost mode",
+                title = stringResource(id = R.string.loading_lost_mode_title),
                 body = stringResource(id = R.string.loading)
             )
             is AsyncUiState.Error -> EmptyStateCard(
-                title = "Lost mode unavailable",
+                title = stringResource(id = R.string.lost_mode_unavailable_title),
                 body = state.message
             )
             is AsyncUiState.Data -> {
                 val content = state.value
                 SectionCard(
-                    title = "Current mode",
-                    eyebrow = "Recovery cadence"
+                    title = stringResource(id = R.string.current_mode_title),
+                    eyebrow = stringResource(id = R.string.recovery_cadence_label)
                 ) {
                     StatusChip(
-                        label = if (content.enabled) "Lost mode active" else "Normal mode",
+                        label = if (content.enabled) {
+                            stringResource(id = R.string.lost_mode_active_label)
+                        } else {
+                            stringResource(id = R.string.normal_mode_label)
+                        },
                         containerColor = if (content.enabled) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.primaryContainer,
                         contentColor = if (content.enabled) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     MetricRow(
-                        label = "Status",
+                        label = stringResource(id = R.string.status_label),
                         value = if (content.enabled) "ON" else "OFF",
                         emphasize = true
                     )
                     MetricRow(
-                        label = "Ends at",
+                        label = stringResource(id = R.string.ends_at_label),
                         value = formatEpochMillis(content.untilEpochMs)
                     )
                 }
 
                 SectionCard(
-                    title = "Before you enable lost mode",
-                    eyebrow = "Just-in-time notice"
+                    title = stringResource(id = R.string.before_enable_lost_mode_title),
+                    eyebrow = stringResource(id = R.string.just_in_time_notice_label)
                 ) {
                     Text(
-                        text = "Lost mode increases reporting frequency for a limited recovery window. It remains visible in the app, uses only the permissions already granted, and records the change in audit history.",
+                        text = stringResource(id = R.string.lost_mode_notice_body),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    MetricRow(label = "User notice", value = "Visible in-app state")
-                    MetricRow(label = "Approximate signals", value = "Still labeled approximate")
-                    MetricRow(label = "Timeout", value = "Automatically ends unless renewed")
+                    MetricRow(
+                        label = stringResource(id = R.string.user_notice_label),
+                        value = stringResource(id = R.string.user_notice_value)
+                    )
+                    MetricRow(
+                        label = stringResource(id = R.string.approximate_signals_label),
+                        value = stringResource(id = R.string.approximate_signals_value)
+                    )
+                    MetricRow(
+                        label = stringResource(id = R.string.timeout_label),
+                        value = stringResource(id = R.string.timeout_value)
+                    )
                 }
 
                 SectionCard(
-                    title = "Actions",
-                    eyebrow = "Time-boxed controls"
+                    title = stringResource(id = R.string.actions_title),
+                    eyebrow = stringResource(id = R.string.time_boxed_controls_label)
                 ) {
                     Button(
                         onClick = { viewModel.enable(hours = 12) },
@@ -111,6 +124,17 @@ fun LostModeScreen(
                     content.errorMessage?.let {
                         Text(it, color = MaterialTheme.colorScheme.error)
                     }
+                }
+
+                SectionCard(
+                    title = stringResource(id = R.string.signal_meanings_title),
+                    eyebrow = stringResource(id = R.string.important_label)
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.approximate_warning_body),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }

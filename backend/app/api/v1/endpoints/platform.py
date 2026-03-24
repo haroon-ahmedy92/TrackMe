@@ -40,6 +40,7 @@ from app.db.models import (
     GeofenceEvent,
     Incident,
     LocationEvent,
+    NotificationEvent,
     RemoteAction,
     RemoteActionState,
 )
@@ -99,6 +100,7 @@ from app.schemas.platform import (
     LocationIngestResponse,
     ApprovalDecisionRequest,
     NotificationCreateRequest,
+    NotificationEventResponse,
     NotificationResponse,
     ObservabilityAlertResponse,
     ObservabilityDashboardResponse,
@@ -1469,6 +1471,45 @@ async def create_notification(
     )
     await session.commit()
     return NotificationResponse(notification_event_id=event.id, status=event.status.value, created_at=event.created_at)
+
+
+@router.get('/notifications', response_model=list[NotificationEventResponse])
+async def list_notifications(
+    org_id: UUID,
+    limit: int = Query(default=50, ge=1, le=200),
+    principal: Principal = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ORG_ADMIN, Role.SECURITY, Role.SECURITY_OPERATOR)),
+    session: AsyncSession = Depends(get_db_session),
+) -> list[NotificationEventResponse]:
+    _assert_org_access(principal, org_id)
+    events = list(
+        (
+            await session.execute(
+                select(NotificationEvent)
+                .where(NotificationEvent.org_id == org_id)
+                .order_by(desc(NotificationEvent.created_at))
+                .limit(limit)
+            )
+        ).scalars().all()
+    )
+    return [
+        NotificationEventResponse(
+            notification_event_id=event.id,
+            org_id=event.org_id,
+            incident_id=event.incident_id,
+            device_id=event.device_id,
+            remote_action_id=event.remote_action_id,
+            recipient_sub=event.recipient_sub,
+            channel=event.channel,
+            template=event.template,
+            payload=event.payload_json,
+            status=event.status.value,
+            provider_message_id=event.provider_message_id,
+            error_message=event.error_message,
+            created_at=event.created_at,
+            sent_at=event.sent_at,
+        )
+        for event in events
+    ]
 
 
 @router.post('/geofences', response_model=GeofenceResponse)

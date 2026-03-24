@@ -6,19 +6,20 @@ import retrofit2.http.POST
 import retrofit2.http.Path
 
 /**
- * Backend-ready API surface. Endpoints are intentionally minimal placeholders for MVP scaffolding.
+ * Live API contract shared with the FastAPI backend.
+ *
+ * The base URL is expected to end with `/api/`, for example:
+ * - `http://10.0.2.2:8000/api/` for Android emulator local backend access
+ * - `http://192.168.1.50:8000/api/` for a physical device on the same LAN
  */
 interface RecoveryApi {
-    @POST("v1/check-ins")
+    @POST("v1/telemetry/check-ins")
     suspend fun submitCheckIn(@Body request: CheckInRequest)
 
     @POST("v1/platform/locations/ingest-batch")
     suspend fun ingestLocationsBatch(
         @Body request: LocationIngestBatchRequestDto
     ): LocationIngestBatchResponseDto
-
-    @POST("v1/audit-events")
-    suspend fun submitAuditEvent(@Body request: AuditEventRequest)
 
     @POST("v1/ownership/pairings/complete")
     suspend fun completePairing(@Body request: PairingCompleteRequestDto): OwnershipBindingResponseDto

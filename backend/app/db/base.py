@@ -21,6 +21,10 @@ def _get_session_local() -> async_sessionmaker[AsyncSession]:
     return _session_local
 
 
+def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    return _get_session_local()
+
+
 async def get_db_session() -> AsyncSession:
     session_local = _get_session_local()
     async with session_local() as session:

@@ -35,6 +35,7 @@ import type {
   LoginResponse,
   LocationHistoryPoint,
   LocationSnapshot,
+  NotificationEventRecord,
   OwnershipBindingRecord,
   RemoteActionRecord,
 } from '@/types/models';
@@ -54,14 +55,31 @@ let geofences = clone(mockGeofences);
 let auditLogs = clone(mockAuditLogs);
 let remoteActions = clone(mockRemoteActions);
 let settings = clone(mockSettings);
-let locationHistory = clone(mockLocationHistory);
-let geofenceEvents = clone(mockGeofenceEvents);
-let incidentRoutes = clone(mockIncidentRoutes);
-let deviceClusters = clone(mockDeviceClusters);
-let caseNotes = clone(mockCaseNotes);
-let caseAttachments = clone(mockCaseAttachments);
-let evidenceExports = clone(mockEvidenceExports);
-let caseEvidenceChains = clone(mockCaseEvidenceChains);
+let notifications: NotificationEventRecord[] = [
+  {
+    id: 'notif-1',
+    orgId: 'org-001',
+    incidentId: 'inc-002',
+    deviceId: 'device-002',
+    channel: 'internal',
+    template: 'incident_escalation',
+    payload: {
+      title: 'Recovery Incident Started',
+      body: 'Lost-mode recovery incident is active. Review the case timeline and latest location quality.',
+    },
+    status: 'SENT',
+    createdAt: new Date(Date.now() - 30 * 60_000).toISOString(),
+    sentAt: new Date(Date.now() - 30 * 60_000).toISOString(),
+  },
+];
+const locationHistory = clone(mockLocationHistory);
+const geofenceEvents = clone(mockGeofenceEvents);
+const incidentRoutes = clone(mockIncidentRoutes);
+const deviceClusters = clone(mockDeviceClusters);
+const caseNotes = clone(mockCaseNotes);
+const caseAttachments = clone(mockCaseAttachments);
+const evidenceExports = clone(mockEvidenceExports);
+const caseEvidenceChains = clone(mockCaseEvidenceChains);
 
 const appendAudit = (entry: {
   action: string;
@@ -149,6 +167,19 @@ export const mockApiClient: ApiClient = {
     return clone(device.trust ?? null);
   },
 
+  async issuePairingToken(payload) {
+    await wait();
+    return {
+      pairingTokenId: `pair-${Date.now()}`,
+      orgId: payload.orgId,
+      deviceId: payload.deviceId,
+      token: `trackme-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`,
+      tokenHint: 'trackme-••••',
+      pairingUri: `trackme://pair?token=mock-${Math.random().toString(36).slice(2)}`,
+      expiresAt: new Date(Date.now() + payload.expiresInMinutes * 60_000).toISOString(),
+    };
+  },
+
   async getLastKnownLocation(deviceId: string): Promise<LocationSnapshot | null> {
     await wait();
     const history = locationHistory[deviceId] ?? [];
@@ -166,6 +197,11 @@ export const mockApiClient: ApiClient = {
       reason: location ? 'Locate request returned last known location' : 'Locate request returned no location',
     });
     return location;
+  },
+
+  async getNotifications(): Promise<NotificationEventRecord[]> {
+    await wait();
+    return clone(notifications);
   },
 
   async getDeviceAccessHistory(deviceId: string): Promise<AccessHistoryRecord[]> {

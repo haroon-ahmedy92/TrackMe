@@ -77,7 +77,8 @@ export default function GeofencesPage() {
 
   const resetDraft = () => setDraft(emptyDraft);
 
-  const saveGeofence = async (_reason: string) => {
+  const saveGeofence = async (reason: string) => {
+    void reason;
     setSaving(true);
     setError(null);
 

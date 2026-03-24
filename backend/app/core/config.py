@@ -22,19 +22,35 @@ class Settings(BaseModel):
     jwt_jwks_url: str | None = None
     jwt_shared_secret: str | None = None
     jwt_algorithms: list[str] = Field(default_factory=lambda: ['HS256'])
-    allow_insecure_jwt_for_dev: bool = True
+    allow_insecure_jwt_for_dev: bool = False
+    local_auth_enabled: bool = False
+    pilot_bootstrap_org_id: str | None = None
+    pilot_bootstrap_org_slug: str = 'pilot-org'
+    pilot_bootstrap_org_name: str = 'TrackMe Pilot'
+    pilot_bootstrap_admin_email: str | None = None
+    pilot_bootstrap_admin_password: str | None = None
+    pilot_bootstrap_admin_name: str = 'Pilot Admin'
+    pilot_bootstrap_admin_role: str = 'admin'
 
     rate_limit_window_seconds: int = 60
     rate_limit_requests: int = 120
 
     fcm_server_key: str | None = None
     fcm_endpoint: str = 'https://fcm.googleapis.com/fcm/send'
-    command_signing_secret: str | None = None
+    command_signing_private_key_pem: str | None = None
+    command_signing_public_key_pem: str | None = None
+    command_signing_private_key_path: str | None = None
+    command_signing_public_key_path: str | None = None
+    allow_placeholder_command_signing_for_dev: bool = False
+    worker_poll_interval_seconds: float = 2.0
+    worker_idle_sleep_seconds: float = 2.0
+    worker_max_events_per_tick: int = 100
+    worker_name: str = 'trackme-rules-worker'
     command_default_ttl_minutes: int = 60
     command_max_attempts: int = 5
     command_pending_retry_seconds: int = 300
-    signed_telemetry_mode: str = 'optional'
-    allow_placeholder_signed_telemetry: bool = True
+    signed_telemetry_mode: str = 'required'
+    allow_placeholder_signed_telemetry: bool = False
     geofence_alert_cooldown_seconds: int = 1800
     rules_alert_cooldown_seconds: int = 1800
     incident_offline_threshold_minutes: int = 180
@@ -47,6 +63,9 @@ class Settings(BaseModel):
     observability_bulk_lookup_threshold: int = 10
     observability_failed_auth_threshold: int = 5
     observability_failed_command_threshold: int = 5
+    cors_allowed_origins: list[str] = Field(
+        default_factory=lambda: ['http://localhost:3000', 'http://127.0.0.1:3000']
+    )
 
 
 settings = Settings()
@@ -67,12 +86,54 @@ settings.allow_insecure_jwt_for_dev = os.getenv(
     'ALLOW_INSECURE_JWT_FOR_DEV',
     'true' if settings.allow_insecure_jwt_for_dev else 'false',
 ).lower() == 'true'
+settings.local_auth_enabled = os.getenv(
+    'LOCAL_AUTH_ENABLED',
+    'true' if settings.local_auth_enabled else 'false',
+).lower() == 'true'
+settings.pilot_bootstrap_org_id = os.getenv('PILOT_BOOTSTRAP_ORG_ID', settings.pilot_bootstrap_org_id)
+settings.pilot_bootstrap_org_slug = os.getenv('PILOT_BOOTSTRAP_ORG_SLUG', settings.pilot_bootstrap_org_slug)
+settings.pilot_bootstrap_org_name = os.getenv('PILOT_BOOTSTRAP_ORG_NAME', settings.pilot_bootstrap_org_name)
+settings.pilot_bootstrap_admin_email = os.getenv(
+    'PILOT_BOOTSTRAP_ADMIN_EMAIL',
+    settings.pilot_bootstrap_admin_email,
+)
+settings.pilot_bootstrap_admin_password = os.getenv(
+    'PILOT_BOOTSTRAP_ADMIN_PASSWORD',
+    settings.pilot_bootstrap_admin_password,
+)
+settings.pilot_bootstrap_admin_name = os.getenv(
+    'PILOT_BOOTSTRAP_ADMIN_NAME',
+    settings.pilot_bootstrap_admin_name,
+)
+settings.pilot_bootstrap_admin_role = os.getenv(
+    'PILOT_BOOTSTRAP_ADMIN_ROLE',
+    settings.pilot_bootstrap_admin_role,
+).lower()
 settings.rate_limit_window_seconds = int(os.getenv('RATE_LIMIT_WINDOW_SECONDS', settings.rate_limit_window_seconds))
 settings.rate_limit_requests = int(os.getenv('RATE_LIMIT_REQUESTS', settings.rate_limit_requests))
 
 settings.fcm_server_key = os.getenv('FCM_SERVER_KEY', settings.fcm_server_key)
 settings.fcm_endpoint = os.getenv('FCM_ENDPOINT', settings.fcm_endpoint)
-settings.command_signing_secret = os.getenv('COMMAND_SIGNING_SECRET', settings.command_signing_secret)
+settings.command_signing_private_key_pem = os.getenv(
+    'COMMAND_SIGNING_PRIVATE_KEY_PEM',
+    settings.command_signing_private_key_pem,
+)
+settings.command_signing_public_key_pem = os.getenv(
+    'COMMAND_SIGNING_PUBLIC_KEY_PEM',
+    settings.command_signing_public_key_pem,
+)
+settings.command_signing_private_key_path = os.getenv(
+    'COMMAND_SIGNING_PRIVATE_KEY_PATH',
+    settings.command_signing_private_key_path,
+)
+settings.command_signing_public_key_path = os.getenv(
+    'COMMAND_SIGNING_PUBLIC_KEY_PATH',
+    settings.command_signing_public_key_path,
+)
+settings.allow_placeholder_command_signing_for_dev = os.getenv(
+    'ALLOW_PLACEHOLDER_COMMAND_SIGNING_FOR_DEV',
+    'true' if settings.allow_placeholder_command_signing_for_dev else 'false',
+).lower() == 'true'
 settings.command_default_ttl_minutes = int(os.getenv('COMMAND_DEFAULT_TTL_MINUTES', settings.command_default_ttl_minutes))
 settings.command_max_attempts = int(os.getenv('COMMAND_MAX_ATTEMPTS', settings.command_max_attempts))
 settings.command_pending_retry_seconds = int(
@@ -117,3 +178,8 @@ settings.observability_failed_auth_threshold = int(
 settings.observability_failed_command_threshold = int(
     os.getenv('OBSERVABILITY_FAILED_COMMAND_THRESHOLD', settings.observability_failed_command_threshold)
 )
+settings.cors_allowed_origins = [
+    item.strip()
+    for item in os.getenv('CORS_ALLOWED_ORIGINS', ','.join(settings.cors_allowed_origins)).split(',')
+    if item.strip()
+]

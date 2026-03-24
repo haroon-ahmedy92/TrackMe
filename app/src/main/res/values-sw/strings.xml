@@ -13,7 +13,15 @@
 
     <string name="onboarding_title">Karibu kwenye Uokoaji na Ulinzi wa Kifaa</string>
     <string name="onboarding_description">Programu hii husaidia kurejesha vifaa vilivyosajiliwa kwa ridhaa na usimamizi wa wazi.</string>
+    <string name="onboarding_preparing_subtitle">Inaandaa ridhaa na usanidi wa ruhusa.</string>
+    <string name="onboarding_error_subtitle">Usajili wa wazi na usanidi wa ruhusa.</string>
+    <string name="onboarding_loading_title">Inapakia</string>
+    <string name="onboarding_error_title">Imeshindwa kufungua hatua ya mwanzo</string>
     <string name="permission_education_body">Ruhusa ya eneo hutumika tu kwa ukaguzi wa uokoaji. Hakuna ufuatiliaji wa siri wala kurekodi kwa siri.</string>
+    <string name="consent_confirmation_title">Uthibitisho wa ridhaa</string>
+    <string name="required_label">Lazima</string>
+    <string name="location_permissions_title">Ruhusa za eneo</string>
+    <string name="android_rules_label">Sheria za Android</string>
     <string name="consent_checkbox_label">Ninaelewa na ninakubali ufuatiliaji wa wazi wa uokoaji/usimamizi kwa kifaa hiki.</string>
     <string name="request_foreground_location">Ruhusu Eneo la Mbele</string>
     <string name="foreground_granted">Ruhusa ya eneo la mbele: imeruhusiwa</string>
@@ -24,8 +32,17 @@
     <string name="background_granted">Ruhusa ya eneo la nyuma: imeruhusiwa</string>
     <string name="background_not_granted">Ruhusa ya eneo la nyuma: haijaruhusiwa/hiari</string>
     <string name="continue_to_enrollment">Endelea Usajili</string>
+    <string name="signal_meanings_title">Jinsi ya kusoma ishara za uokoaji</string>
+    <string name="label_precise">Sahihi zaidi</string>
+    <string name="label_moderate">Wastani</string>
+    <string name="label_approximate">Makadirio</string>
+    <string name="label_stale">Ya zamani</string>
+    <string name="label_offline">Bila mtandao</string>
+    <string name="label_live_recent">Ya karibuni</string>
 
     <string name="enrollment_title">Usajili wa Kifaa</string>
+    <string name="enrollment_preparing_subtitle">Inaandaa usajili wa kifaa kinachomilikiwa na shirika au kilichoidhinishwa.</string>
+    <string name="enrollment_visible_subtitle">Uoanishaji wa wazi kwa vifaa vya mmiliki aliyesajili au shirika linalosimamia pekee.</string>
     <string name="organization_name">Jina la shirika</string>
     <string name="authorization_checkbox">Mimi ni mmiliki au msimamizi aliyeidhinishwa kwa usajili huu.</string>
     <string name="enroll_device">Sajili Kifaa</string>
@@ -37,6 +54,7 @@
     <string name="battery_label">Betri: %1$s</string>
 
     <string name="device_status_title">Hali ya Kifaa</string>
+    <string name="device_status_subtitle">Ridhaa, muda wa usajili, na ubora wa taarifa za uokoaji.</string>
     <string name="consent_version_label">Toleo la ridhaa: %1$s</string>
     <string name="enrolled_at_label">Limesajiliwa: %1$s</string>
     <string name="lost_mode_until_label">Hali ya kupotea hadi: %1$s</string>
@@ -46,12 +64,14 @@
 
     <string name="lost_mode_title">Hali ya Moja kwa Moja / Kupotea</string>
     <string name="lost_mode_description">Tumia hali hii wakati wa tukio la uokoaji tu. Inaonekana wazi na ina muda maalum.</string>
+    <string name="lost_mode_subtitle">Hali ya wazi ya kuripoti mara nyingi zaidi kwa uokoaji wa muda mfupi tu.</string>
     <string name="lost_mode_status">Hali ya kupotea: %1$s</string>
     <string name="enable_lost_mode_12h">Washa Hali ya Kupotea (saa 12)</string>
     <string name="enable_lost_mode_24h">Washa Hali ya Kupotea (saa 24)</string>
     <string name="disable_lost_mode">Zima Hali ya Kupotea</string>
 
     <string name="map_title">Ramani</string>
+    <string name="map_subtitle">Historia ya hivi karibuni ya eneo halali, lebo za usahihi, na muktadha wa geofence kutoka ukaguzi unaoonekana.</string>
     <string name="map_provider_label">Mtoa ramani: %1$s</string>
     <string name="map_marker_title">Kichwa cha alama: %1$s</string>
     <string name="location_lat_lng">Lat/Lng: %1$s, %2$s</string>
@@ -60,6 +80,9 @@
 
     <string name="incidents_title">Matukio</string>
     <string name="incidents_description">Anzisha tukio la uokoaji na omba hatua za mbali pale tu sera inaporuhusu.</string>
+    <string name="incident_summary_title">Muhtasari wa tukio</string>
+    <string name="current_state_label">Hali ya sasa</string>
+    <string name="calm_incident_callout">Tumia hatua zilizo hapa chini baada ya kuthibitisha taarifa za tukio. Eneo la makadirio au la zamani lisichukuliwe kama eneo la moja kwa moja.</string>
     <string name="ticket_reference">Rejea ya tiketi</string>
     <string name="start_lost_incident">Anzisha Tukio la Kupotea (saa 12)</string>
     <string name="request_remote_lock">Omba Kufunga kwa Mbali</string>
@@ -68,6 +91,7 @@
 
     <string name="settings_privacy_title">Mipangilio na Faragha</string>
     <string name="settings_privacy_disclosure">Vipengele vya uokoaji ni vya ridhaa na vinaonekana wazi.</string>
+    <string name="settings_privacy_subtitle">Udhibiti wazi wa faragha kwa vipengele vya uokoaji vinavyoonekana.</string>
     <string name="geofence_opt_in">Washa geofence ya ulinzi wa mali (hiari)</string>
     <string name="geofence_radius_label">Umbali wa geofence: mita %1$s</string>
     <string name="settings_backend_todo">TODO: Sawazisha sera na wasifu wa shirika kwenye backend.</string>

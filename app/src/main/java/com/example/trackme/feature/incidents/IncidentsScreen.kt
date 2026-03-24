@@ -41,14 +41,20 @@ fun IncidentsScreen(
             title = stringResource(id = R.string.incidents_title),
             subtitle = stringResource(id = R.string.incidents_description)
         ) {
-            EmptyStateCard(title = "Loading incidents", body = stringResource(id = R.string.loading))
+            EmptyStateCard(
+                title = stringResource(id = R.string.loading_incidents_title),
+                body = stringResource(id = R.string.loading)
+            )
         }
 
         is AsyncUiState.Error -> TrackMeScreen(
             title = stringResource(id = R.string.incidents_title),
             subtitle = stringResource(id = R.string.incidents_description)
         ) {
-            EmptyStateCard(title = "Incident controls unavailable", body = state.message)
+            EmptyStateCard(
+                title = stringResource(id = R.string.incidents_unavailable_title),
+                body = state.message
+            )
         }
 
         is AsyncUiState.Data -> {
@@ -61,8 +67,8 @@ fun IncidentsScreen(
                 ManagedStateBanner()
 
                 SectionCard(
-                    title = "Incident summary",
-                    eyebrow = "Current state"
+                    title = stringResource(id = R.string.incident_summary_title),
+                    eyebrow = stringResource(id = R.string.current_state_label)
                 ) {
                     StatusChip(
                         label = content.incidentState.name,
@@ -79,19 +85,22 @@ fun IncidentsScreen(
                     )
                     content.lastKnownLocation?.let { lastLocation ->
                         MetricRow(
-                            label = "Last known location",
+                            label = stringResource(id = R.string.last_known_location_label),
                             value = "${lastLocation.methodLabel} • ${lastLocation.confidenceScore}/100"
                         )
                         MetricRow(
-                            label = "Location precision",
+                            label = stringResource(id = R.string.location_precision_label),
                             value = if (lastLocation.isApproximate) "Approximate" else lastLocation.precision.name
                         )
                         MetricRow(
-                            label = "Location timestamp",
+                            label = stringResource(id = R.string.location_timestamp_label),
                             value = formatEpochMillis(lastLocation.capturedAtEpochMs)
                         )
                         lastLocation.geofenceTransition?.let { transition ->
-                            MetricRow(label = "Geofence alert", value = transition.replaceFirstChar { it.uppercase() })
+                            MetricRow(
+                                label = stringResource(id = R.string.geofence_alert_label),
+                                value = transition.replaceFirstChar { it.uppercase() }
+                            )
                         }
                     }
                     content.statusMessage?.let {
@@ -104,8 +113,8 @@ fun IncidentsScreen(
                 }
 
                 SectionCard(
-                    title = "Recovery details",
-                    eyebrow = "Authorization"
+                    title = stringResource(id = R.string.recovery_details_title),
+                    eyebrow = stringResource(id = R.string.authorization_label)
                 ) {
                     OutlinedTextField(
                         value = content.ticketReference,
@@ -155,8 +164,8 @@ fun IncidentsScreen(
                 }
 
                 SectionCard(
-                    title = "Sensitive actions",
-                    eyebrow = "Visible workflow"
+                    title = stringResource(id = R.string.sensitive_actions_title),
+                    eyebrow = stringResource(id = R.string.visible_workflow_label)
                 ) {
                     Button(
                         onClick = viewModel::markAsLost,
@@ -211,44 +220,49 @@ fun IncidentsScreen(
 
                 InfoCallout(text = stringResource(id = R.string.wipe_tradeoff_text))
                 InfoCallout(text = stringResource(id = R.string.remote_action_policy_note))
+                InfoCallout(text = stringResource(id = R.string.calm_incident_callout))
 
                 SectionCard(
-                    title = "Case notes",
-                    eyebrow = "Editable analyst notes"
+                    title = stringResource(id = R.string.case_notes_title),
+                    eyebrow = stringResource(id = R.string.editable_analyst_notes_label)
                 ) {
                     OutlinedTextField(
                         value = content.noteDraft,
                         onValueChange = viewModel::onNoteDraftChanged,
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Note for this case") }
+                        label = { Text(stringResource(id = R.string.case_note_label)) }
                     )
                     RowCheckbox(
                         checked = content.notePinned,
                         onCheckedChange = viewModel::onNotePinnedChanged,
-                        label = "Pin note to top of case view"
+                        label = stringResource(id = R.string.pin_case_note_label)
                     )
                     Button(
                         onClick = viewModel::addCaseNote,
                         enabled = !content.inProgress,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Save case note")
+                        Text(stringResource(id = R.string.save_case_note))
                     }
                     if (content.notes.isEmpty()) {
                         Text(
-                            text = "No analyst notes yet. Notes stay separate from the immutable audit log.",
+                            text = stringResource(id = R.string.no_case_notes),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
                         content.notes.forEach { note ->
                             SectionCard(
                                 modifier = Modifier.fillMaxWidth(),
-                                title = if (note.isPinned) "Pinned note" else "Analyst note",
+                                title = if (note.isPinned) {
+                                    stringResource(id = R.string.pinned_note_title)
+                                } else {
+                                    stringResource(id = R.string.analyst_note_title)
+                                },
                                 eyebrow = formatEpochMillis(note.updatedAtEpochMs)
                             ) {
                                 Text(text = note.body)
                                 Text(
-                                    text = "Author: ${note.authorLabel}",
+                                    text = stringResource(id = R.string.author_prefix, note.authorLabel),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -258,30 +272,30 @@ fun IncidentsScreen(
                 }
 
                 SectionCard(
-                    title = "Attachments and export",
-                    eyebrow = "Case package support"
+                    title = stringResource(id = R.string.attachments_export_title),
+                    eyebrow = stringResource(id = R.string.case_package_support_label)
                 ) {
                     InfoCallout(
-                        text = "Android records attachment references and export placeholders. Full evidence packages are assembled on the backend or web console."
+                        text = stringResource(id = R.string.android_export_callout)
                     )
                     OutlinedTextField(
                         value = content.attachmentNameDraft,
                         onValueChange = viewModel::onAttachmentNameDraftChanged,
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Attachment name") }
+                        label = { Text(stringResource(id = R.string.attachment_name_label)) }
                     )
                     OutlinedTextField(
                         value = content.attachmentDescriptionDraft,
                         onValueChange = viewModel::onAttachmentDescriptionDraftChanged,
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Attachment note") }
+                        label = { Text(stringResource(id = R.string.attachment_note_label)) }
                     )
                     Button(
                         onClick = viewModel::addAttachmentReference,
                         enabled = !content.inProgress,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Record attachment reference")
+                        Text(stringResource(id = R.string.record_attachment_reference))
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -292,14 +306,14 @@ fun IncidentsScreen(
                             enabled = !content.inProgress,
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("JSON export")
+                            Text(stringResource(id = R.string.json_export_label))
                         }
                         OutlinedButton(
                             onClick = { viewModel.requestEvidenceExport(IncidentEvidenceExportFormat.PDF) },
                             enabled = !content.inProgress,
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("PDF export")
+                            Text(stringResource(id = R.string.pdf_export_label))
                         }
                     }
                     if (content.attachments.isNotEmpty()) {
@@ -335,12 +349,12 @@ fun IncidentsScreen(
                 }
 
                 SectionCard(
-                    title = "Actions taken during recovery",
-                    eyebrow = "Commands and decisions"
+                    title = stringResource(id = R.string.actions_taken_title),
+                    eyebrow = stringResource(id = R.string.commands_decisions_label)
                 ) {
                     if (content.actionsTaken.isEmpty()) {
                         Text(
-                            text = "No remote command attempts recorded yet.",
+                            text = stringResource(id = R.string.no_remote_commands),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {

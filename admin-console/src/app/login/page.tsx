@@ -82,7 +82,8 @@ export default function LoginPage() {
         </form>
 
         <p className="text-muted" style={{ marginTop: 14, fontSize: 12 }}>
-          Local development uses mock auth by default (`NEXT_PUBLIC_USE_MOCKS=true`).
+          Mock mode is opt-in only. For live local pilot use, point `NEXT_PUBLIC_API_BASE_URL` at the backend and keep
+          `NEXT_PUBLIC_USE_MOCKS=false`.
         </p>
       </Card>
     </div>

@@ -13,9 +13,11 @@ import { Textarea } from '@/components/ui/Textarea';
 import { apiClient } from '@/lib/api/client';
 import { formatDateTime } from '@/lib/format';
 import { useAsyncData } from '@/lib/hooks/useAsyncData';
+import { getCopy } from '@/lib/i18n/copy';
 import { useMemo, useState } from 'react';
 
 export default function IncidentsPage() {
+  const ui = getCopy(typeof navigator === 'undefined' ? 'en' : navigator.language);
   const incidentsState = useAsyncData(() => apiClient.getIncidents(), []);
   const devicesState = useAsyncData(() => apiClient.getDevices(), []);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
@@ -148,10 +150,8 @@ export default function IncidentsPage() {
   return (
     <div className="page container stack">
       <div>
-        <h1 className="page-title">Incident Case Management</h1>
-        <p className="page-subtitle">
-          Recovery case handling, evidence notes, attachments, exports, and command history in one reviewable workflow.
-        </p>
+        <h1 className="page-title">{ui.incidents.title}</h1>
+        <p className="page-subtitle">{ui.incidents.subtitle}</p>
       </div>
 
       {actionError ? (
@@ -161,14 +161,14 @@ export default function IncidentsPage() {
       ) : null}
 
       <Card>
-        <h2 style={{ marginTop: 0, marginBottom: 10 }}>Create or escalate incident</h2>
+        <h2 style={{ marginTop: 0, marginBottom: 10 }}>{ui.incidents.createTitle}</h2>
         <div className="row">
           <Select
-            label="Target device"
+            label={ui.incidents.targetDevice}
             value={targetDeviceId}
             onChange={(event) => setTargetDeviceId(event.target.value)}
             options={[
-              { label: 'Select device', value: '' },
+              { label: ui.incidents.selectDevice, value: '' },
               ...devices.map((device) => ({
                 label: `${device.deviceName} (${device.incidentState})`,
                 value: device.id,
@@ -176,9 +176,13 @@ export default function IncidentsPage() {
             ]}
           />
           <Button style={{ marginTop: 23 }} disabled={!targetDeviceId} onClick={() => setModal('markLost')}>
-            Mark Device as Lost
+            {ui.incidents.createButton}
           </Button>
         </div>
+      </Card>
+
+      <Card className="warning-note">
+        <p style={{ margin: 0 }}>{ui.incidents.approximateWarning}</p>
       </Card>
 
       <Card>
@@ -188,7 +192,7 @@ export default function IncidentsPage() {
           columns={[
             {
               key: 'title',
-              header: 'Incident',
+              header: ui.incidents.incident,
               cell: (incident) => (
                 <button
                   type="button"
@@ -211,13 +215,13 @@ export default function IncidentsPage() {
             },
             {
               key: 'updated',
-              header: 'Last Updated',
+              header: ui.incidents.lastUpdated,
               cell: (incident) => formatDateTime(incident.updatedAt),
             },
             {
               key: 'window',
-              header: 'High-Frequency Window',
-              cell: (incident) => (incident.highFrequencyUntil ? formatDateTime(incident.highFrequencyUntil) : 'Not active'),
+              header: ui.incidents.highFrequencyWindow,
+              cell: (incident) => (incident.highFrequencyUntil ? formatDateTime(incident.highFrequencyUntil) : ui.incidents.notActive),
             },
           ]}
           emptyMessage="No active incidents"
@@ -228,31 +232,31 @@ export default function IncidentsPage() {
         <div className="grid-2">
           <Card>
             <div className="row" style={{ justifyContent: 'space-between' }}>
-              <h2 style={{ margin: 0 }}>Selected Case</h2>
+              <h2 style={{ margin: 0 }}>{ui.incidents.selectedCase}</h2>
               <Badge variant={selectedIncident.state === 'CONFIRMED_STOLEN' ? 'danger' : 'warning'}>
                 {selectedIncident.state}
               </Badge>
             </div>
             <p className="text-muted" style={{ marginTop: 10 }}>
-              Actor attribution, exports, notes, and command attempts stay visible for review.
+              {ui.incidents.selectedCaseHint}
             </p>
             <p className="text-muted" style={{ marginTop: 8, marginBottom: 0 }}>
               Assigned operator: <strong>{selectedIncident.assignedOperator ?? 'Unassigned'}</strong>
             </p>
             <div className="row" style={{ marginTop: 10 }}>
               <Button variant="danger" onClick={() => setModal('confirmStolen')} disabled={selectedIncident.state !== 'SUSPECTED_LOST'}>
-                Confirm Stolen
+                {ui.incidents.stolenConfirm}
               </Button>
               <Button variant="ghost" onClick={() => setModal('recover')}>
-                Mark Recovered
+                {ui.incidents.recoveredConfirm}
               </Button>
             </div>
           </Card>
 
           <Card>
-            <h2 style={{ marginTop: 0 }}>Evidence Timeline</h2>
+            <h2 style={{ marginTop: 0 }}>{ui.incidents.timelineTitle}</h2>
             <div className="stack" style={{ marginTop: 8 }}>
-              {timelineState.loading ? <p className="text-muted">Loading timeline...</p> : null}
+              {timelineState.loading ? <p className="text-muted">{ui.incidents.timelineLoading}</p> : null}
               {(timelineState.data ?? []).map((event) => (
                 <div key={event.id} style={{ borderLeft: '2px solid var(--border)', paddingLeft: 10 }}>
                   <p style={{ margin: 0, fontWeight: 600 }}>{event.eventType}</p>
@@ -271,17 +275,15 @@ export default function IncidentsPage() {
         <Card>
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
             <div>
-              <h2 style={{ marginTop: 0, marginBottom: 8 }}>Actions Taken During Recovery</h2>
-              <p className="page-subtitle">
-                Signed command attempts, delivery state, and actor attribution stay visible alongside the case.
-              </p>
+              <h2 style={{ marginTop: 0, marginBottom: 8 }}>{ui.incidents.actionsTitle}</h2>
+              <p className="page-subtitle">{ui.incidents.selectedCaseHint}</p>
             </div>
             <Badge variant="neutral">{evidenceState.data?.actionsTaken.length ?? 0} actions</Badge>
           </div>
           <div className="stack" style={{ marginTop: 14 }}>
-            {evidenceState.loading ? <p className="text-muted">Loading command evidence...</p> : null}
+            {evidenceState.loading ? <p className="text-muted">{ui.incidents.actionsLoading}</p> : null}
             {(evidenceState.data?.actionsTaken ?? []).length === 0 ? (
-              <p className="text-muted">No command attempts are linked to this case yet.</p>
+              <p className="text-muted">{ui.incidents.actionsEmpty}</p>
             ) : null}
             {(evidenceState.data?.actionsTaken ?? []).map((action) => (
               <div key={action.id} style={{ borderLeft: '2px solid var(--border)', paddingLeft: 12 }}>
@@ -308,11 +310,11 @@ export default function IncidentsPage() {
         <Card>
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
             <div>
-              <h2 style={{ marginTop: 0, marginBottom: 8 }}>Route & Location Evidence</h2>
-              <p className="page-subtitle">Playback stays time-bounded, and approximate signals never pretend to be exact.</p>
+              <h2 style={{ marginTop: 0, marginBottom: 8 }}>{ui.incidents.routeTitle}</h2>
+              <p className="page-subtitle">{ui.incidents.routeSubtitle}</p>
             </div>
             <Select
-              label="Route window"
+              label={ui.incidents.routeWindow}
               value={windowHours}
               onChange={(event) => setWindowHours(event.target.value)}
               options={[
@@ -337,11 +339,11 @@ export default function IncidentsPage() {
       {selectedIncident ? (
         <div className="grid-2">
           <Card>
-            <h2 style={{ marginTop: 0 }}>Case Notes</h2>
-            <Textarea label="New note" value={noteBody} onChange={(event) => setNoteBody(event.target.value)} />
+            <h2 style={{ marginTop: 0 }}>{ui.incidents.notesTitle}</h2>
+            <Textarea label={ui.incidents.noteLabel} value={noteBody} onChange={(event) => setNoteBody(event.target.value)} />
             <div className="row">
               <Button onClick={() => void submitNote()} disabled={!noteBody.trim() || actionLoading}>
-                Add Note
+                {ui.incidents.addNote}
               </Button>
             </div>
             <div className="stack" style={{ marginTop: 12 }}>
@@ -360,14 +362,14 @@ export default function IncidentsPage() {
           </Card>
 
           <Card>
-            <h2 style={{ marginTop: 0 }}>Attachments & Export</h2>
-            <Input label="Attachment name" value={attachmentName} onChange={(event) => setAttachmentName(event.target.value)} />
-            <Input label="Media type" value={attachmentType} onChange={(event) => setAttachmentType(event.target.value)} />
-            <Input label="Byte size" value={attachmentSize} onChange={(event) => setAttachmentSize(event.target.value)} />
-            <Textarea label="Attachment description" value={attachmentDescription} onChange={(event) => setAttachmentDescription(event.target.value)} />
+            <h2 style={{ marginTop: 0 }}>{ui.incidents.attachmentsTitle}</h2>
+            <Input label={ui.incidents.attachmentName} value={attachmentName} onChange={(event) => setAttachmentName(event.target.value)} />
+            <Input label={ui.incidents.mediaType} value={attachmentType} onChange={(event) => setAttachmentType(event.target.value)} />
+            <Input label={ui.incidents.byteSize} value={attachmentSize} onChange={(event) => setAttachmentSize(event.target.value)} />
+            <Textarea label={ui.incidents.attachmentDescription} value={attachmentDescription} onChange={(event) => setAttachmentDescription(event.target.value)} />
             <div className="row">
               <Button onClick={() => void submitAttachment()} disabled={!attachmentName.trim() || actionLoading}>
-                Add Attachment
+                {ui.incidents.addAttachment}
               </Button>
             </div>
 
@@ -385,23 +387,23 @@ export default function IncidentsPage() {
 
             <div className="stack" style={{ marginTop: 18 }}>
               <Select
-                label="Export format"
+                label={ui.incidents.exportFormat}
                 value={exportFormat}
                 onChange={(event) => setExportFormat(event.target.value as 'csv' | 'json' | 'pdf')}
                 options={[
-                  { label: 'CSV export package', value: 'csv' },
-                  { label: 'JSON export package', value: 'json' },
-                  { label: 'PDF summary placeholder', value: 'pdf' },
+                  { label: ui.incidents.csvExport, value: 'csv' },
+                  { label: ui.incidents.jsonExport, value: 'json' },
+                  { label: ui.incidents.pdfExport, value: 'pdf' },
                 ]}
               />
-              <Input label="Redact fields" value={redactionFields} onChange={(event) => setRedactionFields(event.target.value)} />
+              <Input label={ui.incidents.redactFields} value={redactionFields} onChange={(event) => setRedactionFields(event.target.value)} />
               <Input
-                label="External share recipient"
+                label={ui.incidents.externalRecipient}
                 value={shareRecipient}
                 onChange={(event) => setShareRecipient(event.target.value)}
               />
               <Button onClick={() => void submitExport()} disabled={actionLoading}>
-                Request Evidence Export
+                {ui.incidents.requestExport}
               </Button>
               {(evidenceState.data?.exports ?? []).map((item) => (
                 <div key={item.id} className="warning-note">
@@ -413,10 +415,10 @@ export default function IncidentsPage() {
                     <div className="row">
                       {item.downloadPlaceholder ? (
                         <a href={item.downloadPlaceholder} style={{ color: 'inherit' }}>
-                          download bundle
+                          {ui.incidents.downloadBundle}
                         </a>
                       ) : (
-                        <span>{item.status === 'pending_approval' ? 'awaiting approval' : 'placeholder only'}</span>
+                        <span>{item.status === 'pending_approval' ? ui.incidents.awaitingApproval : ui.incidents.placeholderOnly}</span>
                       )}
                       {item.downloadPlaceholder ? (
                         <Button
@@ -430,7 +432,7 @@ export default function IncidentsPage() {
                             setModal('shareExport');
                           }}
                         >
-                          Share externally
+                          {ui.incidents.shareExternally}
                         </Button>
                       ) : null}
                     </div>
@@ -451,15 +453,13 @@ export default function IncidentsPage() {
         <Card>
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
             <div>
-              <h2 style={{ marginTop: 0, marginBottom: 8 }}>Case Evidence Chain</h2>
-              <p className="page-subtitle">
-                This view combines immutable case events, location evidence, geofence alerts, command attempts, attachments, and mutable notes.
-              </p>
+              <h2 style={{ marginTop: 0, marginBottom: 8 }}>{ui.incidents.evidenceChainTitle}</h2>
+              <p className="page-subtitle">{ui.incidents.evidenceChainSubtitle}</p>
             </div>
             <Badge variant="neutral">{evidenceState.data?.entries.length ?? 0} entries</Badge>
           </div>
           <div className="stack" style={{ marginTop: 14 }}>
-            {evidenceState.loading ? <p className="text-muted">Loading case evidence…</p> : null}
+            {evidenceState.loading ? <p className="text-muted">{ui.incidents.evidenceLoading}</p> : null}
             {(evidenceState.data?.entries ?? []).map((entry) => (
               <div key={entry.id} style={{ borderLeft: '2px solid var(--border)', paddingLeft: 12 }}>
                 <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -478,9 +478,9 @@ export default function IncidentsPage() {
 
       <SensitiveActionModal
         open={modal === 'shareExport'}
-        title="Share Evidence Export Externally"
-        description="External sharing requires a specific reason and is recorded in immutable audit logs."
-        confirmLabel="Share Export"
+        title={ui.incidents.shareTitle}
+        description={ui.incidents.shareDescription}
+        confirmLabel={ui.incidents.shareConfirm}
         danger
         loading={actionLoading}
         onCancel={() => setModal(null)}
@@ -497,9 +497,9 @@ export default function IncidentsPage() {
 
       <SensitiveActionModal
         open={modal === 'markLost'}
-        title="Mark Device as Lost"
-        description="Starts a time-boxed higher-frequency reporting window with clear incident visibility."
-        confirmLabel="Confirm Lost Mode"
+        title={ui.incidents.lostTitle}
+        description={ui.incidents.lostDescription}
+        confirmLabel={ui.incidents.lostConfirm}
         loading={actionLoading}
         onCancel={() => setModal(null)}
         onConfirm={async (reason) => {
@@ -511,9 +511,9 @@ export default function IncidentsPage() {
 
       <SensitiveActionModal
         open={modal === 'confirmStolen'}
-        title="Confirm Stolen"
-        description="This is an elevated decision and should only be used after verification."
-        confirmLabel="Confirm Theft"
+        title={ui.incidents.stolenTitle}
+        description={ui.incidents.stolenDescription}
+        confirmLabel={ui.incidents.stolenConfirm}
         danger
         loading={actionLoading}
         onCancel={() => setModal(null)}
@@ -527,9 +527,9 @@ export default function IncidentsPage() {
 
       <SensitiveActionModal
         open={modal === 'recover'}
-        title="Mark Incident Recovered"
-        description="Ends lost/stolen workflows and records the closure reason in immutable audit logs."
-        confirmLabel="Mark Recovered"
+        title={ui.incidents.recoveredTitle}
+        description={ui.incidents.recoveredDescription}
+        confirmLabel={ui.incidents.recoveredConfirm}
         loading={actionLoading}
         onCancel={() => setModal(null)}
         onConfirm={async (reason) => {

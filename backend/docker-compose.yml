@@ -43,5 +43,22 @@ services:
       redis:
         condition: service_started
 
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trackme-worker
+    command: ./docker/worker-entrypoint.sh
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/trackme
+      REDIS_URL: redis://redis:6379/0
+      RATE_LIMIT_REQUESTS: 180
+      RATE_LIMIT_WINDOW_SECONDS: 60
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
 volumes:
   pg_data:

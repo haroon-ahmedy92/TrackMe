@@ -14,11 +14,13 @@ import com.example.trackme.domain.model.LocationSnapshot
 import com.example.trackme.feature.common.ChipRow
 import com.example.trackme.feature.common.EmptyStateCard
 import com.example.trackme.feature.common.InfoCallout
+import com.example.trackme.feature.common.LocationFreshness
 import com.example.trackme.feature.common.ManagedStateBanner
 import com.example.trackme.feature.common.MetricRow
 import com.example.trackme.feature.common.SectionCard
 import com.example.trackme.feature.common.StatusChip
 import com.example.trackme.feature.common.TrackMeScreen
+import com.example.trackme.feature.common.freshness
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -31,17 +33,17 @@ fun MapScreen(
 
     TrackMeScreen(
         title = stringResource(id = R.string.map_title),
-        subtitle = "Recent lawful location history, precision labels, and geofence context from visible recovery check-ins."
+        subtitle = stringResource(id = R.string.map_subtitle)
     ) {
         ManagedStateBanner()
 
         when (val state = uiState) {
             AsyncUiState.Loading -> EmptyStateCard(
-                title = "Loading location",
+                title = stringResource(id = R.string.loading_location_title),
                 body = stringResource(id = R.string.loading)
             )
             is AsyncUiState.Error -> EmptyStateCard(
-                title = "Map unavailable",
+                title = stringResource(id = R.string.map_unavailable_title),
                 body = state.message
             )
             is AsyncUiState.Data -> {
@@ -49,38 +51,38 @@ fun MapScreen(
                 val history = state.value.history
                 if (location == null) {
                     EmptyStateCard(
-                        title = "No location points yet",
-                        body = "A route and last known marker will appear here after the first visible recovery check-in."
+                        title = stringResource(id = R.string.no_location_points_title),
+                        body = stringResource(id = R.string.no_location_points_body)
                     )
                 } else {
                     LocationHistoryMapCard(history = history)
 
                     SectionCard(
-                        title = "Last known position",
-                        eyebrow = "Current sample"
+                        title = stringResource(id = R.string.last_known_position_title),
+                        eyebrow = stringResource(id = R.string.current_sample_label)
                     ) {
                         PrecisionChips(location = location)
                         MetricRow(
-                            label = "Coordinates",
+                            label = stringResource(id = R.string.coordinates_label),
                             value = "${location.latitude.formatCoordinate()}, ${location.longitude.formatCoordinate()}",
                             emphasize = true
                         )
-                        MetricRow(label = "Accuracy", value = "${location.accuracyMeters.toInt()} meters")
-                        MetricRow(label = "Method", value = location.methodLabel)
-                        MetricRow(label = "Captured", value = location.capturedAtEpochMs.toReadableTime())
-                        MetricRow(label = "Signals", value = location.sourceSignals.joinToString().ifBlank { "Visible app check-in" })
+                        MetricRow(label = stringResource(id = R.string.accuracy_label), value = "${location.accuracyMeters.toInt()} meters")
+                        MetricRow(label = stringResource(id = R.string.method_metric_label), value = location.methodLabel)
+                        MetricRow(label = stringResource(id = R.string.captured_label), value = location.capturedAtEpochMs.toReadableTime())
+                        MetricRow(label = stringResource(id = R.string.signals_label), value = location.sourceSignals.joinToString().ifBlank { stringResource(id = R.string.visible_check_in_fallback) })
                         location.geofenceTransition?.let {
-                            MetricRow(label = "Geofence event", value = it.replaceFirstChar(Char::uppercase))
+                            MetricRow(label = stringResource(id = R.string.geofence_event_label), value = it.replaceFirstChar(Char::uppercase))
                         }
                     }
 
                     SectionCard(
-                        title = "Recent points",
-                        eyebrow = "Bounded playback"
+                        title = stringResource(id = R.string.recent_points_title),
+                        eyebrow = stringResource(id = R.string.bounded_playback_label)
                     ) {
                         if (history.isEmpty()) {
                             Text(
-                                text = "No recent history samples stored locally yet.",
+                                text = stringResource(id = R.string.no_recent_history),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -88,15 +90,28 @@ fun MapScreen(
                             history.takeLast(5).reversed().forEach { sample ->
                                 MetricRow(
                                     label = sample.capturedAtEpochMs.toReadableTime(),
-                                    value = "${sample.precision.readableLabel()} • ${sample.confidenceScore}/100"
+                                    value = listOf(
+                                        sample.precisionLabel(),
+                                        stringResource(id = R.string.confidence_chip, sample.confidenceScore),
+                                        sample.freshnessLabel(),
+                                    ).joinToString(" • ")
                                 )
                             }
                         }
                     }
 
-                    InfoCallout(
-                        text = "Approximate results use a separate visual style and should only be treated as area-level context. Android background limits mean the app uses bounded, visible check-ins instead of continuous hidden tracking."
-                    )
+                    SectionCard(
+                        title = stringResource(id = R.string.signal_meanings_title),
+                        eyebrow = stringResource(id = R.string.important_label)
+                    ) {
+                        Text(
+                            text = stringResource(id = R.string.signal_meanings_body),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    InfoCallout(text = stringResource(id = R.string.signal_meaning_callout))
                 }
             }
         }
@@ -108,21 +123,24 @@ private fun PrecisionChips(location: LocationSnapshot) {
     ChipRow(
         {
             StatusChip(
-                label = location.precision.readableLabel(),
+                label = location.precisionLabel(),
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer
             )
         },
         {
             StatusChip(
-                label = "${location.confidenceScore}/100 confidence",
+                label = stringResource(id = R.string.confidence_chip, location.confidenceScore),
                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer
             )
         },
         {
             StatusChip(
-                label = if (location.isApproximate) "Approximate source" else "Exact signal allowed",
+                label = when {
+                    location.isApproximate -> stringResource(id = R.string.source_approximate_label)
+                    else -> location.freshnessLabel()
+                },
                 containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                 contentColor = MaterialTheme.colorScheme.onTertiaryContainer
             )
@@ -130,11 +148,23 @@ private fun PrecisionChips(location: LocationSnapshot) {
     )
 }
 
+@Composable
+private fun LocationSnapshot.precisionLabel(): String = when (precision) {
+    LocationPrecision.PRECISE -> stringResource(id = R.string.label_precise)
+    LocationPrecision.MODERATE -> stringResource(id = R.string.label_moderate)
+    LocationPrecision.APPROXIMATE -> stringResource(id = R.string.label_approximate)
+}
+
+@Composable
+private fun LocationSnapshot.freshnessLabel(): String = when (freshness()) {
+    LocationFreshness.RECENT -> stringResource(id = R.string.label_live_recent)
+    LocationFreshness.STALE -> stringResource(id = R.string.label_stale)
+    LocationFreshness.OFFLINE -> stringResource(id = R.string.label_offline)
+}
+
 private fun Long.toReadableTime(): String {
-    val formatter = SimpleDateFormat("dd MMM, HH:mm", Locale.US)
+    val formatter = SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault())
     return formatter.format(Date(this))
 }
 
 private fun Double.formatCoordinate(): String = String.format(Locale.US, "%.5f", this)
-
-private fun LocationPrecision.readableLabel(): String = name.lowercase().replaceFirstChar { it.uppercase() }

@@ -56,6 +56,7 @@ body {
   font-family: "Segoe UI", "Noto Sans", "Helvetica Neue", sans-serif;
   background: radial-gradient(circle at top right, rgb(0 111 139 / 8%), transparent 40%), var(--bg);
   color: var(--text);
+  line-height: 1.5;
 }
 
 a {
@@ -70,6 +71,18 @@ textarea {
   font: inherit;
 }
 
+button,
+input,
+select,
+textarea {
+  min-height: 44px;
+}
+
+:focus-visible {
+  outline: 3px solid var(--brand-orange);
+  outline-offset: 3px;
+}
+
 .container {
   width: 100%;
   max-width: 1240px;
@@ -82,7 +95,7 @@ textarea {
 
 .page-title {
   margin: 0;
-  font-size: 1.4rem;
+  font-size: clamp(1.4rem, 2.4vw, 1.8rem);
   font-weight: 700;
 }
 
@@ -90,6 +103,7 @@ textarea {
   margin: 6px 0 0;
   color: var(--text-muted);
   font-size: 0.95rem;
+  max-width: 70ch;
 }
 
 .grid-2 {
@@ -108,6 +122,18 @@ textarea {
   .grid-2,
   .grid-3 {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --border: color-mix(in srgb, var(--text) 35%, var(--surface));
+    --text-muted: color-mix(in srgb, var(--text) 78%, var(--bg));
+  }
+
+  .warning-note {
+    border-width: 2px;
+    background: color-mix(in srgb, var(--warning) 22%, var(--surface));
   }
 }
 

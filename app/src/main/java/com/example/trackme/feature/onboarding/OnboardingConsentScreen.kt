@@ -80,16 +80,22 @@ fun OnboardingConsentScreen(
     when (val state = uiState) {
         AsyncUiState.Loading -> TrackMeScreen(
             title = stringResource(id = R.string.onboarding_title),
-            subtitle = "Preparing consent and permission setup."
+            subtitle = stringResource(id = R.string.onboarding_preparing_subtitle)
         ) {
-            EmptyStateCard(title = "Loading", body = stringResource(id = R.string.loading))
+            EmptyStateCard(
+                title = stringResource(id = R.string.onboarding_loading_title),
+                body = stringResource(id = R.string.loading)
+            )
         }
 
         is AsyncUiState.Error -> TrackMeScreen(
             title = stringResource(id = R.string.onboarding_title),
-            subtitle = "Visible enrollment and permission setup."
+            subtitle = stringResource(id = R.string.onboarding_error_subtitle)
         ) {
-            EmptyStateCard(title = "Unable to load onboarding", body = state.message)
+            EmptyStateCard(
+                title = stringResource(id = R.string.onboarding_error_title),
+                body = state.message
+            )
         }
 
         is AsyncUiState.Data -> {
@@ -103,13 +109,11 @@ fun OnboardingConsentScreen(
                 title = stringResource(id = R.string.onboarding_title),
                 subtitle = stringResource(id = R.string.onboarding_description)
             ) {
-                InfoCallout(
-                    text = "TrackMe is a visible device recovery app. It explains why permissions are needed, records consent, and does not hide itself or enable covert tracking."
-                )
+                InfoCallout(text = stringResource(id = R.string.onboarding_visibility_callout))
 
                 SectionCard(
-                    title = content.disclosure?.title ?: "Recovery disclosure",
-                    eyebrow = content.disclosure?.version ?: "Disclosure"
+                    title = content.disclosure?.title ?: stringResource(id = R.string.onboarding_disclosure_title),
+                    eyebrow = content.disclosure?.version ?: stringResource(id = R.string.disclosure_label)
                 ) {
                     content.disclosure?.bulletPoints?.forEach { bullet ->
                         Text(
@@ -121,34 +125,34 @@ fun OnboardingConsentScreen(
                 }
 
                 SectionCard(
-                    title = "Why background location may be requested",
-                    eyebrow = "Core feature explanation"
+                    title = stringResource(id = R.string.onboarding_background_title),
+                    eyebrow = stringResource(id = R.string.onboarding_background_eyebrow)
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
-                            text = "Background location supports lawful recovery check-ins, lost-mode updates, geofence alerts, and last-known-location evidence when the app is not open.",
+                            text = stringResource(id = R.string.onboarding_background_body),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         MetricRow(
-                            label = "If granted",
-                            value = "Recovery can continue within Android limits",
+                            label = stringResource(id = R.string.if_granted_label),
+                            value = stringResource(id = R.string.if_granted_value)
                         )
                         MetricRow(
-                            label = "If skipped",
-                            value = "The app only works while open or during foreground use",
+                            label = stringResource(id = R.string.if_skipped_label),
+                            value = stringResource(id = R.string.if_skipped_value)
                         )
                         MetricRow(
-                            label = "Important",
-                            value = "Approximate results stay labeled approximate",
+                            label = stringResource(id = R.string.important_label),
+                            value = stringResource(id = R.string.important_approximate_value),
                             emphasize = true
                         )
                     }
                 }
 
                 SectionCard(
-                    title = "Consent confirmation",
-                    eyebrow = "Required"
+                    title = stringResource(id = R.string.consent_confirmation_title),
+                    eyebrow = stringResource(id = R.string.required_label)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -166,11 +170,15 @@ fun OnboardingConsentScreen(
                 }
 
                 SectionCard(
-                    title = "Location permissions",
-                    eyebrow = "Android rules"
+                    title = stringResource(id = R.string.location_permissions_title),
+                    eyebrow = stringResource(id = R.string.android_rules_label)
                 ) {
                     StatusChip(
-                        label = if (content.foregroundLocationGranted) "Foreground granted" else "Foreground pending",
+                        label = if (content.foregroundLocationGranted) {
+                            stringResource(id = R.string.foreground_granted_short)
+                        } else {
+                            stringResource(id = R.string.foreground_pending_short)
+                        },
                         containerColor = if (content.foregroundLocationGranted) {
                             MaterialTheme.colorScheme.secondaryContainer
                         } else {
@@ -206,9 +214,7 @@ fun OnboardingConsentScreen(
                     )
 
                     if (needsBackground && content.foregroundLocationGranted) {
-                        InfoCallout(
-                            text = "Android treats background location as a high-sensitivity permission. We ask only because recovery is a core feature, and you can continue after reviewing the explanation even if you postpone it."
-                        )
+                        InfoCallout(text = stringResource(id = R.string.background_guidance_callout))
 
                         Text(
                             text = stringResource(id = R.string.background_permission_explain),
@@ -216,7 +222,11 @@ fun OnboardingConsentScreen(
                         )
 
                         StatusChip(
-                            label = if (content.backgroundLocationGranted) "Background granted" else "Background optional",
+                            label = if (content.backgroundLocationGranted) {
+                                stringResource(id = R.string.background_granted_short)
+                            } else {
+                                stringResource(id = R.string.background_optional_short)
+                            },
                             containerColor = if (content.backgroundLocationGranted) {
                                 MaterialTheme.colorScheme.secondaryContainer
                             } else {
@@ -264,21 +274,35 @@ fun OnboardingConsentScreen(
                 }
 
                 SectionCard(
-                    title = "What happens next",
-                    eyebrow = "Visible enrollment"
+                    title = stringResource(id = R.string.onboarding_next_title),
+                    eyebrow = stringResource(id = R.string.visible_enrollment_label)
                 ) {
-                    MetricRow(label = "Consent record", value = content.disclosure?.version ?: "Pending")
                     MetricRow(
-                        label = "Background permission",
+                        label = stringResource(id = R.string.onboarding_consent_record_label),
+                        value = content.disclosure?.version ?: stringResource(id = R.string.pending_label)
+                    )
+                    MetricRow(
+                        label = stringResource(id = R.string.onboarding_background_permission_label),
                         value = when {
-                            !needsBackground -> "Not required by this Android version"
-                            content.backgroundLocationGranted -> "Granted"
-                            content.backgroundDecisionMade -> "Deferred by user"
-                            else -> "Pending decision"
+                            !needsBackground -> stringResource(id = R.string.background_not_required_value)
+                            content.backgroundLocationGranted -> stringResource(id = R.string.background_permission_granted_value)
+                            content.backgroundDecisionMade -> stringResource(id = R.string.background_permission_deferred_value)
+                            else -> stringResource(id = R.string.background_permission_pending_value)
                         }
                     )
                     Text(
-                        text = "Continuing takes you to visible enrollment. Device ownership, pairing, and future locate access are all enforced through auditable backend policy checks.",
+                        text = stringResource(id = R.string.onboarding_next_body),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                SectionCard(
+                    title = stringResource(id = R.string.signal_meanings_title),
+                    eyebrow = stringResource(id = R.string.important_label)
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.signal_meanings_body),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

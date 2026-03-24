@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+import base64
+import hashlib
+import hmac
+import json
 
 from fastapi import Depends, Header, HTTPException, Request, status
 try:
@@ -9,10 +13,69 @@ try:
 except ModuleNotFoundError:  # pragma: no cover
     class _FallbackJWT:
         @staticmethod
+        def encode(claims: dict, secret: str, algorithm: str = 'HS256') -> str:
+            if algorithm != 'HS256':
+                raise ValueError('Fallback JWT encoder supports only HS256.')
+            header = {'alg': algorithm, 'typ': 'JWT'}
+            signing_input = '.'.join(
+                [
+                    _b64url(json.dumps(header, separators=(',', ':'), sort_keys=True).encode('utf-8')),
+                    _b64url(json.dumps(claims, separators=(',', ':'), sort_keys=True).encode('utf-8')),
+                ]
+            )
+            signature = hmac.new(secret.encode('utf-8'), signing_input.encode('ascii'), hashlib.sha256).digest()
+            return f'{signing_input}.{_b64url(signature)}'
+
+        @staticmethod
+        def decode(
+            token: str,
+            secret: str,
+            algorithms: list[str],
+            audience: str | None = None,
+            issuer: str | None = None,
+            options: dict | None = None,
+        ) -> dict:
+            if 'HS256' not in algorithms:
+                raise ValueError('Fallback JWT decoder supports only HS256.')
+            try:
+                header_b64, payload_b64, signature_b64 = token.split('.')
+            except ValueError as exc:
+                raise ValueError('Malformed JWT') from exc
+
+            signing_input = f'{header_b64}.{payload_b64}'
+            expected = hmac.new(secret.encode('utf-8'), signing_input.encode('ascii'), hashlib.sha256).digest()
+            actual = _b64url_decode(signature_b64)
+            if not hmac.compare_digest(expected, actual):
+                raise ValueError('Invalid JWT signature')
+
+            payload = json.loads(_b64url_decode(payload_b64))
+            verify_options = options or {}
+            if verify_options.get('verify_aud', audience is not None) and audience is not None:
+                if payload.get('aud') != audience:
+                    raise ValueError('Invalid audience')
+            if verify_options.get('verify_iss', issuer is not None) and issuer is not None:
+                if payload.get('iss') != issuer:
+                    raise ValueError('Invalid issuer')
+            return payload
+
+        @staticmethod
         def get_unverified_claims(token: str) -> dict:
-            return {}
+            try:
+                _header_b64, payload_b64, _signature_b64 = token.split('.')
+            except ValueError:
+                return {}
+            return json.loads(_b64url_decode(payload_b64))
 
     jwt = _FallbackJWT()
+
+
+def _b64url(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).rstrip(b'=').decode('ascii')
+
+
+def _b64url_decode(value: str) -> bytes:
+    padding = '=' * (-len(value) % 4)
+    return base64.urlsafe_b64decode(value + padding)
 
 from app.core.config import settings
 from app.services.observability_service import security_signal_store

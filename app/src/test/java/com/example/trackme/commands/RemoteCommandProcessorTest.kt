@@ -8,8 +8,9 @@ import com.example.trackme.domain.model.DeviceCommandType
 import com.example.trackme.domain.repository.AuditRepository
 import com.example.trackme.domain.repository.CommandRepository
 import java.time.Instant
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
+import java.security.KeyPairGenerator
+import java.security.Signature
+import java.util.Base64
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -27,6 +28,14 @@ class RemoteCommandProcessorTest {
     private val timeProvider = object : TimeProvider {
         override fun nowEpochMillis(): Long = 1_710_410_000_000
     }
+    private val keyPair = KeyPairGenerator.getInstance("EC").apply {
+        initialize(256)
+    }.generateKeyPair()
+    private val verifier = CommandSignatureVerifier(
+        json = json,
+        configuredPublicKeyPem = keyPair.public.toPem(),
+        forTests = true,
+    )
 
     @Test
     fun process_displayRecoveryMessage_marksDeliveredAndAcked() = runTest {
@@ -35,7 +44,7 @@ class RemoteCommandProcessorTest {
         val auditRepository = RecordingAuditRepository()
         val processor = RemoteCommandProcessor(
             commandRepository = repository,
-            commandSignatureVerifier = CommandSignatureVerifier(json),
+            commandSignatureVerifier = verifier,
             lostModeCommandExecutor = RecordingLostModeExecutor(),
             recoveryMessageNotifier = notifier,
             deviceAdminCommandController = RecordingDeviceAdminController(),
@@ -61,7 +70,7 @@ class RemoteCommandProcessorTest {
         val auditRepository = RecordingAuditRepository()
         val processor = RemoteCommandProcessor(
             commandRepository = repository,
-            commandSignatureVerifier = CommandSignatureVerifier(json),
+            commandSignatureVerifier = verifier,
             lostModeCommandExecutor = RecordingLostModeExecutor(),
             recoveryMessageNotifier = notifier,
             deviceAdminCommandController = RecordingDeviceAdminController(),
@@ -106,9 +115,20 @@ class RemoteCommandProcessorTest {
     }
 
     private fun sign(payloadJson: String): String {
-        val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec("trackme-dev-command-secret-change-me".toByteArray(), "HmacSHA256"))
-        return mac.doFinal(payloadJson.toByteArray()).joinToString(separator = "") { "%02x".format(it) }
+        val signature = Signature.getInstance("SHA256withECDSA").apply {
+            initSign(keyPair.private)
+            update(payloadJson.encodeToByteArray())
+        }.sign()
+        return Base64.getEncoder().encodeToString(signature)
+    }
+
+    private fun java.security.PublicKey.toPem(): String {
+        val base64 = Base64.getEncoder().encodeToString(encoded)
+        return buildString {
+            appendLine("-----BEGIN PUBLIC KEY-----")
+            base64.chunked(64).forEach(::appendLine)
+            append("-----END PUBLIC KEY-----")
+        }
     }
 }
 

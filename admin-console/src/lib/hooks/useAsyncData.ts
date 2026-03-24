@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { DependencyList, useCallback, useEffect, useState } from 'react';
 
 export interface AsyncState<T> {
   data: T | null;
@@ -9,7 +9,7 @@ export interface AsyncState<T> {
   refresh: () => Promise<void>;
 }
 
-export const useAsyncData = <T,>(loader: () => Promise<T>, deps: unknown[] = []): AsyncState<T> => {
+export const useAsyncData = <T,>(loader: () => Promise<T>, deps: DependencyList = []): AsyncState<T> => {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +26,7 @@ export const useAsyncData = <T,>(loader: () => Promise<T>, deps: unknown[] = [])
     } finally {
       setLoading(false);
     }
-  }, deps);
+  }, [loader, ...deps]);
 
   useEffect(() => {
     void refresh();

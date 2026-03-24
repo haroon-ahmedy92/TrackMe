@@ -7,6 +7,18 @@ plugins {
     alias(libs.plugins.hilt.android)
 }
 
+fun escapeBuildConfig(value: String): String {
+    return value
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+        .replace("\n", "\\n")
+}
+
+val trackmeApiBaseUrl = providers.gradleProperty("TRACKME_API_BASE_URL")
+    .orElse("http://10.0.2.2:8000/api/")
+val trackmeCommandVerificationPublicKeyPem = providers.gradleProperty("TRACKME_COMMAND_VERIFICATION_PUBLIC_KEY_PEM")
+    .orElse("")
+
 android {
     namespace = "com.example.trackme"
     compileSdk = 36
@@ -19,6 +31,12 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "TRACKME_API_BASE_URL", "\"${escapeBuildConfig(trackmeApiBaseUrl.get())}\"")
+        buildConfigField(
+            "String",
+            "TRACKME_COMMAND_VERIFICATION_PUBLIC_KEY_PEM",
+            "\"${escapeBuildConfig(trackmeCommandVerificationPublicKeyPem.get())}\""
+        )
     }
 
     buildTypes {
@@ -39,6 +57,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     packaging {
         resources {

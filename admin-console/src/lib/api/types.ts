@@ -16,12 +16,16 @@ import type {
   IncidentTimelineEvent,
   LoginRequest,
   LoginResponse,
+  NotificationEventRecord,
+  OwnershipType,
   LocationHistoryPoint,
   LocationSnapshot,
   OwnershipBindingRecord,
+  PairingTokenRecord,
   PlatformSettings,
   DeviceTrustRecord,
   RemoteActionRecord,
+  EnrollmentType,
 } from '@/types/models';
 
 export interface ApiClient {
@@ -30,12 +34,22 @@ export interface ApiClient {
   getDeviceById(deviceId: string): Promise<DeviceRecord>;
   getDeviceBinding(deviceId: string): Promise<OwnershipBindingRecord | null>;
   getDeviceTrustStatus(deviceId: string): Promise<DeviceTrustRecord | null>;
+  issuePairingToken(payload: {
+    orgId: string;
+    deviceId?: string;
+    ownerSubject?: string;
+    enrollmentType: EnrollmentType;
+    ownershipType: OwnershipType;
+    consentVersion: string;
+    expiresInMinutes: number;
+  }): Promise<PairingTokenRecord>;
   getLastKnownLocation(deviceId: string): Promise<LocationSnapshot | null>;
   locateDevice(deviceId: string, reason: string): Promise<LocationSnapshot | null>;
   getDeviceAccessHistory(deviceId: string): Promise<AccessHistoryRecord[]>;
   getLocationHistory(deviceId: string, windowHours?: number): Promise<LocationHistoryPoint[]>;
   getDeviceClusters(windowHours?: number, cellSizeMeters?: number): Promise<DeviceClusterRecord[]>;
   getIncidents(filters?: IncidentFilters): Promise<IncidentRecord[]>;
+  getNotifications(limit?: number): Promise<NotificationEventRecord[]>;
   assignIncident(incidentId: string, payload: { operatorSub: string; reason: string }): Promise<IncidentRecord>;
   getIncidentTimeline(incidentId: string): Promise<IncidentTimelineEvent[]>;
   getIncidentRoute(incidentId: string, windowHours?: number): Promise<IncidentRouteRecord>;

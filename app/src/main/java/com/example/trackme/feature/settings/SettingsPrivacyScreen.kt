@@ -1,7 +1,7 @@
 package com.example.trackme.feature.settings
 
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Button
@@ -42,28 +42,32 @@ fun SettingsPrivacyScreen(
 
     TrackMeScreen(
         title = stringResource(id = R.string.settings_privacy_title),
-        subtitle = "Clear privacy controls for visible recovery features."
+        subtitle = stringResource(id = R.string.settings_privacy_subtitle)
     ) {
         ManagedStateBanner()
         InfoCallout(text = stringResource(id = R.string.settings_privacy_disclosure))
 
         when (val state = uiState) {
             AsyncUiState.Loading -> EmptyStateCard(
-                title = "Loading privacy settings",
+                title = stringResource(id = R.string.loading_privacy_settings_title),
                 body = stringResource(id = R.string.loading)
             )
             is AsyncUiState.Error -> EmptyStateCard(
-                title = "Settings unavailable",
+                title = stringResource(id = R.string.settings_unavailable_title),
                 body = state.message
             )
             is AsyncUiState.Data -> {
                 val content = state.value
                 SectionCard(
-                    title = "Consent record",
-                    eyebrow = "Visible enrollment"
+                    title = stringResource(id = R.string.consent_record_title),
+                    eyebrow = stringResource(id = R.string.visible_enrollment_label)
                 ) {
                     StatusChip(
-                        label = if (content.consentVersion != null) "Consent recorded" else "Consent record missing",
+                        label = if (content.consentVersion != null) {
+                            stringResource(id = R.string.consent_recorded_label)
+                        } else {
+                            stringResource(id = R.string.consent_missing_label)
+                        },
                         containerColor = if (content.consentVersion != null) {
                             MaterialTheme.colorScheme.secondaryContainer
                         } else {
@@ -76,34 +80,34 @@ fun SettingsPrivacyScreen(
                         }
                     )
                     MetricRow(
-                        label = "Consent version",
-                        value = content.consentVersion ?: "Not recorded"
+                        label = stringResource(id = R.string.onboarding_consent_record_label),
+                        value = content.consentVersion ?: stringResource(id = R.string.not_recorded_label)
                     )
                     MetricRow(
-                        label = "Accepted at",
+                        label = stringResource(id = R.string.accepted_at_label),
                         value = formatEpochMillis(content.consentAcceptedAtEpochMs)
                     )
                     Text(
-                        text = "Background location is explained during onboarding because last-known-location recovery is a core feature. This app does not enable hidden or deceptive behavior.",
+                        text = stringResource(id = R.string.background_location_core_feature_body),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
                 SectionCard(
-                    title = "Privacy dashboard",
-                    eyebrow = "Policy-safe defaults"
+                    title = stringResource(id = R.string.privacy_dashboard_title),
+                    eyebrow = stringResource(id = R.string.policy_safe_defaults_label)
                 ) {
-                    MetricRow(label = "App visibility", value = "Always visible")
-                    MetricRow(label = "Locate access", value = "Reason required and audited")
-                    MetricRow(label = "Approximate signals", value = "Clearly labeled", emphasize = true)
-                    MetricRow(label = "Retention default", value = "Short and admin-controlled")
-                    MetricRow(label = "Sensitive actions", value = "Explained before use")
+                    MetricRow(label = stringResource(id = R.string.app_visibility_label), value = stringResource(id = R.string.always_visible_value))
+                    MetricRow(label = stringResource(id = R.string.locate_access_label), value = stringResource(id = R.string.reason_required_value))
+                    MetricRow(label = stringResource(id = R.string.approximate_signals_label), value = stringResource(id = R.string.important_approximate_value), emphasize = true)
+                    MetricRow(label = stringResource(id = R.string.retention_default_label), value = stringResource(id = R.string.short_admin_controlled_value))
+                    MetricRow(label = stringResource(id = R.string.sensitive_actions_metric_label), value = stringResource(id = R.string.explained_before_use_value))
                 }
 
                 SectionCard(
-                    title = "Geofence protection",
-                    eyebrow = "Opt-in asset protection"
+                    title = stringResource(id = R.string.geofence_protection_title),
+                    eyebrow = stringResource(id = R.string.opt_in_asset_protection_label)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -122,13 +126,17 @@ fun SettingsPrivacyScreen(
                     }
 
                     StatusChip(
-                        label = if (content.geofenceEnabled) "Protection enabled" else "Protection disabled",
+                        label = if (content.geofenceEnabled) {
+                            stringResource(id = R.string.protection_enabled_label)
+                        } else {
+                            stringResource(id = R.string.protection_disabled_label)
+                        },
                         containerColor = if (content.geofenceEnabled) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                         contentColor = if (content.geofenceEnabled) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
                     MetricRow(
-                        label = "Radius",
+                        label = stringResource(id = R.string.radius_label),
                         value = "${content.geofenceRadiusMeters} meters",
                         emphasize = true
                     )
@@ -140,19 +148,19 @@ fun SettingsPrivacyScreen(
                     )
 
                     Text(
-                        text = "Geofence alerts are optional asset-protection signals. They complement location evidence and are not a replacement for explicit consent or platform policy checks.",
+                        text = stringResource(id = R.string.geofence_explanation_body),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
                 SectionCard(
-                    title = "Access history",
-                    eyebrow = "Owner and admin visibility"
+                    title = stringResource(id = R.string.access_history_title),
+                    eyebrow = stringResource(id = R.string.owner_admin_visibility_label)
                 ) {
                     if (content.accessHistory.isEmpty()) {
                         Text(
-                            text = "No recent access activity has been recorded on this device yet.",
+                            text = stringResource(id = R.string.no_access_history),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -185,19 +193,19 @@ fun SettingsPrivacyScreen(
                 }
 
                 SectionCard(
-                    title = "Report abuse or confusion",
-                    eyebrow = "Support and accountability"
+                    title = stringResource(id = R.string.report_abuse_title),
+                    eyebrow = stringResource(id = R.string.support_accountability_label)
                 ) {
                     Text(
-                        text = "If someone used the product in a way that seems inconsistent with policy, report it here. Reports are added to the audit trail for follow-up.",
+                        text = stringResource(id = R.string.report_abuse_body),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     OutlinedTextField(
                         value = abuseDraft.value,
                         onValueChange = { abuseDraft.value = it },
-                        label = { Text("What happened?") },
-                        supportingText = { Text("Describe the misuse, confusion, or unexpected access behavior.") },
+                        label = { Text(stringResource(id = R.string.what_happened_label)) },
+                        supportingText = { Text(stringResource(id = R.string.abuse_report_supporting)) },
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3
                     )
@@ -209,24 +217,24 @@ fun SettingsPrivacyScreen(
                         enabled = abuseDraft.value.trim().length >= 8,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Submit abuse report")
+                        Text(stringResource(id = R.string.submit_abuse_report))
                     }
                 }
 
                 SectionCard(
-                    title = "Account deletion / deprovision",
-                    eyebrow = "Authorized removal"
+                    title = stringResource(id = R.string.deprovision_title),
+                    eyebrow = stringResource(id = R.string.authorized_removal_label)
                 ) {
                     Text(
-                        text = "Use this flow when the device should no longer remain enrolled or managed. Final deprovisioning should be completed by an authorized admin workflow so the action is fully audited.",
+                        text = stringResource(id = R.string.deprovision_body),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     OutlinedTextField(
                         value = deprovisionReason.value,
                         onValueChange = { deprovisionReason.value = it },
-                        label = { Text("Reason for deprovision") },
-                        supportingText = { Text("For example: device returned to stock, user offboarded, or consent withdrawn.") },
+                        label = { Text(stringResource(id = R.string.deprovision_reason_label)) },
+                        supportingText = { Text(stringResource(id = R.string.deprovision_reason_supporting)) },
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 2
                     )
@@ -238,11 +246,11 @@ fun SettingsPrivacyScreen(
                         enabled = deprovisionReason.value.trim().length >= 8,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Request deprovision")
+                        Text(stringResource(id = R.string.request_deprovision))
                     }
                 }
 
-                InfoCallout(text = "Tenant retention settings are kept short by default and should only be changed by authorized admins in the web console.")
+                InfoCallout(text = stringResource(id = R.string.retention_console_callout))
                 content.statusMessage?.let {
                     Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }

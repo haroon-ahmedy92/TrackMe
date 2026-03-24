@@ -21,7 +21,7 @@ import com.example.trackme.R
 fun ManagedStateBanner() {
     SectionCard(
         modifier = Modifier.fillMaxWidth(),
-        eyebrow = "Protected state"
+        eyebrow = stringResource(id = R.string.protected_state_label)
     ) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -41,14 +41,14 @@ fun ManagedStateBanner() {
                 ChipRow(
                     {
                         StatusChip(
-                            label = "Visible",
+                            label = stringResource(id = R.string.visible_label),
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
                             contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     },
                     {
                         StatusChip(
-                            label = "Consent-based",
+                            label = stringResource(id = R.string.consent_based_label),
                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                         )

@@ -644,6 +644,23 @@ class NotificationResponse(BaseModel):
     created_at: datetime
 
 
+class NotificationEventResponse(BaseModel):
+    notification_event_id: UUID
+    org_id: UUID
+    incident_id: UUID | None
+    device_id: UUID | None
+    remote_action_id: UUID | None
+    recipient_sub: str | None
+    channel: str
+    template: str
+    payload: dict
+    status: str
+    provider_message_id: str | None
+    error_message: str | None
+    created_at: datetime
+    sent_at: datetime | None
+
+
 class IpEnrichmentRequest(BaseModel):
     ip_address: str = Field(min_length=3, max_length=64)
 

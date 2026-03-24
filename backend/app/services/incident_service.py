@@ -35,17 +35,17 @@ from app.services.incident_audit_events import (
     INCIDENT_REMOTE_WIPE_EXECUTED,
 )
 from app.services.incident_state_machine import IncidentStateMachine
-from app.services.notification_service import NotificationMessage, NotificationService
+from app.services.notification_event_service import NotificationEventService
 
 
 class IncidentService:
     def __init__(
         self,
         state_machine: IncidentStateMachine,
-        notification_service: NotificationService,
+        notification_event_service: NotificationEventService,
     ) -> None:
         self.state_machine = state_machine
-        self.notification_service = notification_service
+        self.notification_event_service = notification_event_service
 
     async def mark_lost(
         self,
@@ -96,6 +96,10 @@ class IncidentService:
             },
         )
         await self._notify_escalation(
+            session=session,
+            org_id=device.organization_id,
+            incident_id=incident.id,
+            device_id=device.id,
             title='Recovery Incident Started',
             body=payload.recovery_message,
         )
@@ -140,6 +144,10 @@ class IncidentService:
             metadata={'reason': payload.reason},
         )
         await self._notify_escalation(
+            session=session,
+            org_id=device.organization_id,
+            incident_id=incident.id,
+            device_id=device.id,
             title='Confirmed Stolen Device',
             body=f'Incident {incident.id} requires urgent response.',
         )
@@ -462,13 +470,27 @@ class IncidentService:
         )
         await session.flush()
 
-    async def _notify_escalation(self, title: str, body: str) -> None:
-        await self.notification_service.send(
-            NotificationMessage(
-                title=title,
-                body=body,
-                device_token='owner-admin-placeholder',
-            )
+    async def _notify_escalation(
+        self,
+        *,
+        session: AsyncSession,
+        org_id,
+        incident_id: UUID,
+        device_id: UUID,
+        title: str,
+        body: str,
+    ) -> None:
+        await self.notification_event_service.create_internal_alert(
+            session,
+            org_id=org_id,
+            incident_id=incident_id,
+            device_id=device_id,
+            template='incident_escalation',
+            payload={
+                'title': title,
+                'body': body,
+                'kind': 'incident_escalation',
+            },
         )
 
     def _assert_actor_org_access(self, actor_org_id: str | None, resource_org_id) -> None:

@@ -187,6 +187,7 @@ def test_ack_endpoint_records_audit_entry() -> None:
     from app.db.base import get_db_session
     app.dependency_overrides[get_command_queue_service] = lambda: fake_service
     app.dependency_overrides[get_audit_log_service] = lambda: audit_service
+    app.dependency_overrides[get_signed_telemetry_service] = lambda: FakeSignedTelemetryService(accepted=True)
     app.dependency_overrides[get_db_session] = _dummy_db_session
     try:
         client = TestClient(app)

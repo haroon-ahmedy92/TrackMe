@@ -1,4 +1,6 @@
 export type LocationPrecision = 'precise' | 'moderate' | 'approximate';
+export type EnrollmentType = 'owner_enrolled' | 'org_managed';
+export type OwnershipType = 'single_user' | 'organization_owned';
 
 export type DeviceStatus = 'protected' | 'unenrolled' | 'lost_mode';
 
@@ -34,13 +36,23 @@ export interface OwnershipBindingRecord {
   orgId: string;
   deviceId: string;
   ownerSubject?: string;
-  ownershipType: 'single_user' | 'organization_owned';
+  ownershipType: OwnershipType;
   proofKind: string;
   consentVersion: string;
   consentCapturedAt: string;
   isActive: boolean;
   createdAt: string;
   endedAt?: string;
+}
+
+export interface PairingTokenRecord {
+  pairingTokenId: string;
+  orgId: string;
+  deviceId?: string;
+  token: string;
+  tokenHint: string;
+  pairingUri: string;
+  expiresAt: string;
 }
 
 export interface UserProfile {
@@ -266,6 +278,23 @@ export interface AuditLogRecord {
   targetId: string;
   reason?: string;
   metadata?: Record<string, string | number | boolean | null>;
+}
+
+export interface NotificationEventRecord {
+  id: string;
+  orgId: string;
+  incidentId?: string;
+  deviceId?: string;
+  remoteActionId?: string;
+  recipientSub?: string;
+  channel: string;
+  template: string;
+  payload: Record<string, string | number | boolean | null>;
+  status: string;
+  providerMessageId?: string;
+  errorMessage?: string;
+  createdAt: string;
+  sentAt?: string;
 }
 
 export interface AccessHistoryRecord {

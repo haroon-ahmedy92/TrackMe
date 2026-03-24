@@ -1,36 +1,67 @@
 package com.example.trackme.commands
 
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
+import com.example.trackme.BuildConfig
+import java.security.KeyFactory
+import java.security.PublicKey
+import java.security.Signature
+import java.security.spec.X509EncodedKeySpec
+import java.util.Base64
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
- * Placeholder verifier that matches the backend HMAC placeholder signer.
+ * Verifies backend command envelopes using the configured server public key.
  *
- * TODO(security): replace with asymmetric command verification rooted in the device registration key.
+ * This keeps command authenticity separate from device telemetry signing: the device trusts
+ * commands signed by the backend/operator control plane, while the backend trusts telemetry
+ * signed by the device key.
  */
 @Singleton
-class CommandSignatureVerifier @Inject constructor(
+class CommandSignatureVerifier private constructor(
     private val json: Json,
+    private val configuredPublicKeyPem: String,
 ) {
+    @Inject
+    constructor(json: Json) : this(json, BuildConfig.TRACKME_COMMAND_VERIFICATION_PUBLIC_KEY_PEM)
+
+    internal constructor(
+        json: Json,
+        configuredPublicKeyPem: String,
+        forTests: Boolean,
+    ) : this(json, configuredPublicKeyPem)
+
     fun verify(payloadJson: String, signature: String, algorithm: String): Boolean {
         if (algorithm != SUPPORTED_ALGORITHM) return false
+        val publicKey = loadConfiguredPublicKey() ?: return false
         val payload = runCatching { json.parseToJsonElement(payloadJson) }.getOrNull() ?: return false
         val canonicalJson = canonicalJson(payload)
-        val expected = hmacSha256Placeholder(canonicalJson)
-        return expected == signature
+        return runCatching {
+            Signature.getInstance(JAVA_SIGNATURE_ALGORITHM).apply {
+                initVerify(publicKey)
+                update(canonicalJson.encodeToByteArray())
+            }.verify(Base64.getDecoder().decode(signature))
+        }.getOrDefault(false)
     }
 
-    private fun hmacSha256Placeholder(canonicalJson: String): String {
-        val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(PLACEHOLDER_SHARED_SECRET.encodeToByteArray(), "HmacSHA256"))
-        return mac.doFinal(canonicalJson.encodeToByteArray()).joinToString(separator = "") { "%02x".format(it) }
+    fun hasVerificationMaterial(): Boolean = loadConfiguredPublicKey() != null
+
+    private fun loadConfiguredPublicKey(): PublicKey? {
+        val pem = configuredPublicKeyPem.trim()
+        if (pem.isBlank()) return null
+        val normalized = pem
+            .replace("\\n", "\n")
+            .replace("-----BEGIN PUBLIC KEY-----", "")
+            .replace("-----END PUBLIC KEY-----", "")
+            .replace("\\s".toRegex(), "")
+        val decoded = runCatching { Base64.getDecoder().decode(normalized) }.getOrNull() ?: return null
+        return runCatching {
+            KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(decoded))
+        }.getOrNull()
     }
 
     private fun canonicalJson(element: JsonElement): String {
@@ -45,8 +76,9 @@ class CommandSignatureVerifier @Inject constructor(
             else -> json.encodeToString(JsonElement.serializer(), element)
         }
     }
+
     companion object {
-        const val SUPPORTED_ALGORITHM = "HMAC_SHA256_PLACEHOLDER"
-        private const val PLACEHOLDER_SHARED_SECRET = "trackme-dev-command-secret-change-me"
+        const val SUPPORTED_ALGORITHM = "ECDSA_P256_SHA256"
+        private const val JAVA_SIGNATURE_ALGORITHM = "SHA256withECDSA"
     }
 }

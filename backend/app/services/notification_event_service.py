@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import logging
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import NotificationEvent, NotificationStatus
 from app.schemas.platform import NotificationCreateRequest
 from app.services.notification_service import NotificationMessage, NotificationService
+
+logger = logging.getLogger(__name__)
 
 
 class NotificationEventService:
@@ -51,6 +54,16 @@ class NotificationEventService:
             record.sent_at = datetime.now(timezone.utc)
             record.provider_message_id = provider_message_id
         except Exception as exc:  # pragma: no cover
+            logger.exception(
+                'Notification delivery failed',
+                extra={
+                    'org_id': str(payload.org_id),
+                    'device_id': str(payload.device_id) if payload.device_id else None,
+                    'incident_id': str(payload.incident_id) if payload.incident_id else None,
+                    'template': payload.template,
+                    'channel': payload.channel,
+                },
+            )
             record.status = NotificationStatus.FAILED
             record.error_message = str(exc)[:250]
         await session.flush()

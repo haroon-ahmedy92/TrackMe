@@ -26,3 +26,5 @@ backend/.ruff_cache/
 admin-console/node_modules/
 admin-console/.next/
 admin-console/.env.local
+admin-console/tsconfig.tsbuildinfo
+admin-console/tsconfig.typecheck.tsbuildinfo

@@ -46,6 +46,7 @@ The easiest learning path is:
 11. [`docs/policy-approvals.md`](./docs/policy-approvals.md)
 12. [`docs/device-trust-signals.md`](./docs/device-trust-signals.md)
 13. [`docs/operator-support-evidence-exports.md`](./docs/operator-support-evidence-exports.md)
+14. [`docs/local-pilot-runbook.md`](./docs/local-pilot-runbook.md)
 
 The larger test execution plan also lives in [`TEST_STRATEGY.md`](./TEST_STRATEGY.md).
 
@@ -228,12 +229,22 @@ Important starting points:
 
 ## Local Development
 
+For the full integrated local pilot flow, use:
+
+- [`docs/local-pilot-runbook.md`](./docs/local-pilot-runbook.md)
+
 ### Android
 
 ```bash
+./gradlew :app:assembleDebug
 ./gradlew installDebug
 ./gradlew testDebugUnitTest
 ```
+
+Android now reads these Gradle properties:
+
+- `TRACKME_API_BASE_URL`
+- `TRACKME_COMMAND_VERIFICATION_PUBLIC_KEY_PEM`
 
 ### Backend
 
@@ -247,6 +258,20 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
+In another terminal, run the queue/rules worker:
+
+```bash
+cd backend
+source .venv/bin/activate
+python -m app.worker
+```
+
+The admin console uses the local pilot auth endpoint:
+
+- `POST /api/v1/auth/login`
+
+It expects the bootstrap admin credentials from `backend/.env`.
+
 ### Admin console
 
 ```bash
@@ -255,10 +280,15 @@ npm install
 npm run dev
 ```
 
+Set `NEXT_PUBLIC_USE_MOCKS=false` so the console uses the live backend by default.
+
 ## Current Verification
 
 - Android unit tests pass with `./gradlew testDebugUnitTest`
+- Android debug build passes with `./gradlew :app:assembleDebug`
 - Backend tests pass with `PYTHONPATH=backend pytest -q backend/tests`
+- Admin console typecheck passes with `cd admin-console && npm run typecheck`
+- Admin console production build passes with `cd admin-console && npm run build`
 
 ## Production Gaps To Understand
 

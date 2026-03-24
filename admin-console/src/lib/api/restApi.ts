@@ -15,14 +15,13 @@ import type {
   EvidenceExportRecord,
   GeofenceRecord,
   GeofenceEventRecord,
-  IncidentFilters,
   IncidentRecord,
-  IncidentRouteRecord,
   IncidentTimelineEvent,
   LoginRequest,
   LoginResponse,
   LocationHistoryPoint,
   LocationSnapshot,
+  NotificationEventRecord,
   OwnershipBindingRecord,
   PlatformSettings,
   RemoteActionRecord,
@@ -228,6 +227,38 @@ const toEvidenceShare = (payload: {
   reason: payload.reason,
   sharedBy: payload.shared_by_sub,
   sharedAt: payload.shared_at,
+});
+
+const toNotificationEvent = (payload: {
+  notification_event_id: string;
+  org_id: string;
+  incident_id?: string | null;
+  device_id?: string | null;
+  remote_action_id?: string | null;
+  recipient_sub?: string | null;
+  channel: string;
+  template: string;
+  payload: Record<string, string | number | boolean | null>;
+  status: string;
+  provider_message_id?: string | null;
+  error_message?: string | null;
+  created_at: string;
+  sent_at?: string | null;
+}): NotificationEventRecord => ({
+  id: payload.notification_event_id,
+  orgId: payload.org_id,
+  incidentId: payload.incident_id ?? undefined,
+  deviceId: payload.device_id ?? undefined,
+  remoteActionId: payload.remote_action_id ?? undefined,
+  recipientSub: payload.recipient_sub ?? undefined,
+  channel: payload.channel,
+  template: payload.template,
+  payload: payload.payload,
+  status: payload.status,
+  providerMessageId: payload.provider_message_id ?? undefined,
+  errorMessage: payload.error_message ?? undefined,
+  createdAt: payload.created_at,
+  sentAt: payload.sent_at ?? undefined,
 });
 
 const toIncident = (payload: {
@@ -459,6 +490,36 @@ export const restApiClient: ApiClient = {
     };
   },
 
+  issuePairingToken: async (payload) => {
+    const response = await httpClient.post<{
+      pairing_token_id: string;
+      org_id: string;
+      device_id?: string | null;
+      token: string;
+      token_hint: string;
+      pairing_uri: string;
+      expires_at: string;
+    }>('/ownership/pairing-tokens', {
+      org_id: payload.orgId,
+      device_id: payload.deviceId || undefined,
+      owner_subject: payload.ownerSubject || undefined,
+      enrollment_type: payload.enrollmentType,
+      ownership_type: payload.ownershipType,
+      consent_version: payload.consentVersion,
+      expires_in_minutes: payload.expiresInMinutes,
+      proof_kind: 'enrollment_token',
+    });
+    return {
+      pairingTokenId: response.pairing_token_id,
+      orgId: response.org_id,
+      deviceId: response.device_id ?? undefined,
+      token: response.token,
+      tokenHint: response.token_hint,
+      pairingUri: response.pairing_uri,
+      expiresAt: response.expires_at,
+    };
+  },
+
   getLastKnownLocation: async (deviceId: string) => {
     const payload = await httpClient.get<{
       event_id: string;
@@ -593,6 +654,28 @@ export const restApiClient: ApiClient = {
       }>
     >(`/platform/incidents?${query.toString()}`);
     return payload.map(toIncident);
+  },
+
+  getNotifications: async (limit = 25) => {
+    const payload = await httpClient.get<
+      Array<{
+        notification_event_id: string;
+        org_id: string;
+        incident_id?: string | null;
+        device_id?: string | null;
+        remote_action_id?: string | null;
+        recipient_sub?: string | null;
+        channel: string;
+        template: string;
+        payload: Record<string, string | number | boolean | null>;
+        status: string;
+        provider_message_id?: string | null;
+        error_message?: string | null;
+        created_at: string;
+        sent_at?: string | null;
+      }>
+    >(`/platform/notifications?org_id=${encodeURIComponent(orgId())}&limit=${encodeURIComponent(String(limit))}`);
+    return payload.map(toNotificationEvent);
   },
 
   assignIncident: async (incidentId, payload) => {

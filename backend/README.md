@@ -48,6 +48,7 @@ docker compose up --build
 
 API: `http://localhost:8000`  
 Swagger UI: `http://localhost:8000/docs`
+Worker: runs as `trackme-worker`
 
 ## Local Run (without Docker)
 ```bash
@@ -58,6 +59,50 @@ pip install -r requirements.txt
 cp .env.example .env
 alembic upgrade head
 uvicorn app.main:app --reload
+```
+
+In a second terminal:
+
+```bash
+cd backend
+source .venv/bin/activate
+python -m app.worker
+```
+
+## Local Pilot Auth
+
+The admin console now logs into the real backend by default.
+
+Configure these in `backend/.env`:
+
+- `LOCAL_AUTH_ENABLED=true`
+- `JWT_SHARED_SECRET=...`
+- `PILOT_BOOTSTRAP_ADMIN_EMAIL=admin@trackme.local`
+- `PILOT_BOOTSTRAP_ADMIN_PASSWORD=pilot-password-123`
+- `PILOT_BOOTSTRAP_ADMIN_NAME=Pilot Admin`
+- `PILOT_BOOTSTRAP_ORG_NAME=TrackMe Pilot Org`
+- `PILOT_BOOTSTRAP_ORG_SLUG=trackme-pilot`
+
+Then use `POST /api/v1/auth/login` or the admin-console login page.
+
+## Command Signing Keys
+
+Remote commands now use EC key signing instead of placeholder secrets.
+
+Generate a local keypair:
+
+```bash
+cd /home/haroon/AndroidStudioProjects/TrackMe
+mkdir -p backend/.secrets
+openssl ecparam -name prime256v1 -genkey -noout -out backend/.secrets/command_signing_private.pem
+openssl ec -in backend/.secrets/command_signing_private.pem -pubout -out backend/.secrets/command_signing_public.pem
+```
+
+Point `.env` at those files:
+
+```env
+COMMAND_SIGNING_PRIVATE_KEY_PATH=/home/haroon/AndroidStudioProjects/TrackMe/backend/.secrets/command_signing_private.pem
+COMMAND_SIGNING_PUBLIC_KEY_PATH=/home/haroon/AndroidStudioProjects/TrackMe/backend/.secrets/command_signing_public.pem
 ```
 
 ## Alembic Migrations

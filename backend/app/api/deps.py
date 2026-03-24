@@ -22,6 +22,7 @@ from app.services.geofence_service import GeofenceService
 from app.services.incident_service import IncidentService
 from app.services.incident_state_machine import IncidentStateMachine
 from app.services.integrity_verification_service import IntegrityVerificationService
+from app.services.local_auth_service import LocalAuthService
 from app.services.ip_enrichment_service import IpEnrichmentService
 from app.services.location_ingestion_service import LocationIngestionService
 from app.services.location_confidence import LocationConfidenceService
@@ -69,7 +70,7 @@ def get_notification_service() -> NotificationService:
 def get_incident_service() -> IncidentService:
     return IncidentService(
         state_machine=IncidentStateMachine(),
-        notification_service=get_notification_service(),
+        notification_event_service=get_notification_event_service(),
     )
 
 
@@ -207,3 +208,7 @@ def get_observability_service() -> ObservabilityService:
 
 def get_compliance_service() -> ComplianceService:
     return ComplianceService()
+
+
+def get_local_auth_service() -> LocalAuthService:
+    return LocalAuthService()

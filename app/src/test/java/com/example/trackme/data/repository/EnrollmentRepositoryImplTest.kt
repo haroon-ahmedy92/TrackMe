@@ -154,8 +154,6 @@ private class FakeRecoveryApi(
         error("Not needed in this test")
     }
 
-    override suspend fun submitAuditEvent(request: com.example.trackme.data.network.AuditEventRequest) = Unit
-
     override suspend fun completePairing(request: PairingCompleteRequestDto): OwnershipBindingResponseDto {
         return binding ?: error("backend unavailable")
     }
